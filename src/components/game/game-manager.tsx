@@ -44,13 +44,21 @@ export function GameManager() {
     if (savedState) {
       try {
         const state = JSON.parse(savedState);
-        // Basic validation to ensure loaded data structure is somewhat expected
-        // This won't catch all stale data issues but can help prevent crashes
         if (state.players && Array.isArray(state.players)) setPlayers(state.players);
+        
+        // Load gamePhase first to determine if rounds should be loaded or regenerated
+        let loadedGamePhase: GamePhase = 'SETUP';
+        if (state.gamePhase && typeof state.gamePhase === 'string') {
+            loadedGamePhase = state.gamePhase as GamePhase;
+            setGamePhase(loadedGamePhase);
+        } else {
+            setGamePhase('SETUP'); // Default to setup if phase is missing/invalid
+        }
+
         if (state.gameRounds && Array.isArray(state.gameRounds) && state.gameRounds.length > 0) {
            // If gamePhase is SETUP, don't load old rounds, let new ones generate.
            // Or if the rounds structure seems invalid (e.g. no cardsDealt)
-           if (state.gamePhase === 'SETUP' || !state.gameRounds[0]?.cardsDealt) {
+           if (loadedGamePhase === 'SETUP' || !state.gameRounds[0]?.cardsDealt) {
             // Potentially stale rounds for a SETUP phase, or malformed.
             // Rely on handleStartGame to generate fresh rounds.
            } else {
@@ -59,10 +67,7 @@ export function GameManager() {
         }
         if (state.playersScoreData && Array.isArray(state.playersScoreData)) setPlayersScoreData(state.playersScoreData);
         if (state.currentRoundForInput && typeof state.currentRoundForInput === 'number') setCurrentRoundForInput(state.currentRoundForInput);
-        if (state.gamePhase && typeof state.gamePhase === 'string') setGamePhase(state.gamePhase as GamePhase);
-        else {
-          setGamePhase('SETUP'); // Default to setup if phase is missing/invalid
-        }
+        
 
       } catch (error) {
         console.error("Failed to load saved state:", error);
@@ -74,10 +79,7 @@ export function GameManager() {
 
   // Save state to localStorage whenever it changes
   useEffect(() => {
-    // Avoid saving an empty/initial state immediately on load if nothing has happened.
     if (gamePhase === 'SETUP' && players.length === 0 && gameRounds.length === 0) {
-        // If localStorage exists, it means there was a previous game. Don't overwrite it with an empty state
-        // until a new game is explicitly started or players are added.
         if (localStorage.getItem('updownRiverScorerState')) {
             return;
         }
@@ -100,7 +102,6 @@ export function GameManager() {
 
   const handleRemovePlayer = useCallback((id: string) => {
     setPlayers(prev => prev.filter(p => p.id !== id));
-    // If all players are removed, consider resetting part of the game state or not
   }, []);
 
   const handleStartGame = useCallback(() => {
@@ -108,7 +109,6 @@ export function GameManager() {
       toast({ title: "Need at least 2 players to start.", variant: "destructive" });
       return;
     }
-    // Crucially, new rounds are generated here, overriding any loaded from localStorage for a *new* game.
     const roundsConfig = generateGameRounds(players.length, MAX_CARDS_DEALT_CONFIG);
     setGameRounds(roundsConfig);
 
@@ -134,7 +134,7 @@ export function GameManager() {
     if (bid === taken) {
       return 10 + bid;
     }
-    return 0; // Or -Math.abs(bid - taken) or other penalty rules
+    return 0; 
   };
 
   const handleUpdateScore = useCallback((playerId: string, roundNumber: number, bidStr: string, takenStr: string) => {
@@ -164,7 +164,6 @@ export function GameManager() {
   }, []);
 
   const handleNextRound = useCallback(() => {
-    // Validate current round inputs before proceeding
     const currentRoundDataIsValid = playersScoreData.every(player => {
         const roundEntry = player.scores.find(s => s.roundNumber === currentRoundForInput);
         return roundEntry && roundEntry.bid !== null && roundEntry.taken !== null;
@@ -178,30 +177,15 @@ export function GameManager() {
     if (currentRoundForInput < gameRounds.length) {
       setCurrentRoundForInput(prev => prev + 1);
     } else {
-      // This case should ideally be handled by the "Finish Game" button
-      // but as a fallback, if NextRound is called on the last round, transition to results.
       setGamePhase('RESULTS');
       toast({ title: "Game Finished!", description: "All rounds completed. Check out the final scores." });
     }
   }, [currentRoundForInput, gameRounds.length, playersScoreData, toast]);
 
   const handleFinishGame = useCallback(() => {
-     const currentRoundDataIsValid = playersScoreData.every(player => {
-        const roundEntry = player.scores.find(s => s.roundNumber === currentRoundForInput);
-        // For the last round, it's okay if it's not fully filled if user wants to finish early,
-        // but ideally, it should be. We'll allow finishing.
-        // Consider if strict validation is needed here as well.
-        return roundEntry; // Simpler check: just ensure entry exists. Stricter: check bid/taken not null.
-    });
-
-    // If scoring is ongoing and current round isn't valid (optional strict check)
-    // if (!currentRoundDataIsValid && gamePhase === 'SCORING') {
-    //     toast({ title: "Missing Scores", description: "Please enter bid and tricks taken for all players in the final round.", variant: "destructive" });
-    //     return;
-    // }
     setGamePhase('RESULTS');
     toast({ title: "Game Finished!", description: "Check out the final scores." });
-  }, [playersScoreData, currentRoundForInput, gamePhase, toast]);
+  }, [toast]);
 
   const handlePlayAgain = useCallback(() => {
     setPlayers([]);
@@ -209,7 +193,7 @@ export function GameManager() {
     setPlayersScoreData([]);
     setCurrentRoundForInput(1);
     setGamePhase('SETUP');
-    localStorage.removeItem('updownRiverScorerState'); // Clear saved state for new game
+    localStorage.removeItem('updownRiverScorerState');
     toast({ title: "New Game Setup", description: "Add players to start again." });
   }, [toast]);
 
@@ -220,10 +204,8 @@ export function GameManager() {
   if (gamePhase === 'SCORING' && gameRounds.length > 0 && playersScoreData.length > 0) {
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
     if (!currentRoundInfo) {
-        // This might happen if currentRoundForInput is out of sync with gameRounds, e.g. after bad localStorage load
-        // Attempt to reset or handle gracefully
         console.error("Error: Current round configuration not found. Resetting to setup.");
-        handlePlayAgain(); // Force reset
+        handlePlayAgain(); 
         return <p>Error loading round. Resetting game...</p>;
     }
     return (
@@ -234,6 +216,7 @@ export function GameManager() {
         onUpdateScore={handleUpdateScore}
         onNextRound={handleNextRound}
         onFinishGame={handleFinishGame}
+        onRestartGame={handlePlayAgain} // Pass handlePlayAgain as onRestartGame
       />
     );
   }
@@ -242,7 +225,5 @@ export function GameManager() {
     return <ResultsDisplay playersScoreData={playersScoreData} onPlayAgain={handlePlayAgain} />;
   }
 
-  // Fallback or initial loading state, especially if localStorage load is async and hasn't completed.
-  // Or if gamePhase is somehow invalid.
   return <p>Loading game... If this persists, try refreshing or starting a new game.</p>;
 }

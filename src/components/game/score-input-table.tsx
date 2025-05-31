@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -15,6 +16,7 @@ interface ScoreInputTableProps {
   onUpdateScore: (playerId: string, roundNumber: number, bid: string, taken: string) => void;
   onNextRound: () => void;
   onFinishGame: () => void;
+  onRestartGame: () => void; // Added prop for restarting game
 }
 
 export function ScoreInputTable({
@@ -24,6 +26,7 @@ export function ScoreInputTable({
   onUpdateScore,
   onNextRound,
   onFinishGame,
+  onRestartGame, // Destructure new prop
 }: ScoreInputTableProps) {
   
   const currentRoundConfig = gameRounds.find(r => r.roundNumber === currentRoundForInput);
@@ -133,16 +136,21 @@ export function ScoreInputTable({
             </TableFooter>
           </Table>
         </div>
-        <div className="mt-8 flex justify-end gap-4">
-          {isLastRound ? (
-            <Button onClick={onFinishGame} className="bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
-              <CheckCircle className="mr-2 h-5 w-5" /> Finish Game & View Results
-            </Button>
-          ) : (
-            <Button onClick={onNextRound} size="lg">
-              Next Round <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          )}
+        <div className="mt-8 flex justify-between items-center gap-4"> {/* Changed to justify-between */}
+          <Button onClick={onRestartGame} variant="outline" size="lg">
+            <RefreshCw className="mr-2 h-5 w-5" /> Restart Game
+          </Button>
+          <div className="flex gap-4"> {/* Grouped original buttons */}
+            {isLastRound ? (
+              <Button onClick={onFinishGame} className="bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
+                <CheckCircle className="mr-2 h-5 w-5" /> Finish Game & View Results
+              </Button>
+            ) : (
+              <Button onClick={onNextRound} size="lg">
+                Next Round <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
