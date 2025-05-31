@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -14,13 +15,15 @@ const generateGameRounds = (numPlayers: number, maxCardsDealtPerPlayer: number):
   // Cap maxCards if too many players for a standard 52 card deck
   const actualMaxCards = Math.min(maxCardsDealtPerPlayer, Math.floor(52 / numPlayers));
 
-  // Rounds going up
-  for (let i = 1; i <= actualMaxCards; i++) {
-    rounds.push({ roundNumber: rounds.length + 1, cardsDealt: i, isUpRound: true });
-  }
-  // Rounds going down
-  for (let i = actualMaxCards - 1; i >= 1; i--) {
+  // Rounds going down from actualMaxCards to 1
+  for (let i = actualMaxCards; i >= 1; i--) {
     rounds.push({ roundNumber: rounds.length + 1, cardsDealt: i, isUpRound: false });
+  }
+  // Rounds going up from 2 to actualMaxCards
+  // (Start from 2 because 1 card round is already covered in the "down" sequence,
+  //  and this loop won't run if actualMaxCards is 1)
+  for (let i = 2; i <= actualMaxCards; i++) {
+    rounds.push({ roundNumber: rounds.length + 1, cardsDealt: i, isUpRound: true });
   }
   return rounds;
 };
