@@ -16,7 +16,7 @@ interface ScoreInputTableProps {
   onUpdateScore: (playerId: string, roundNumber: number, bid: string, taken: string) => void;
   onNextRound: () => void;
   onFinishGame: () => void;
-  onRestartGame: () => void; // Added prop for restarting game
+  onRestartGame: () => void;
 }
 
 export function ScoreInputTable({
@@ -26,7 +26,7 @@ export function ScoreInputTable({
   onUpdateScore,
   onNextRound,
   onFinishGame,
-  onRestartGame, // Destructure new prop
+  onRestartGame,
 }: ScoreInputTableProps) {
   
   const currentRoundConfig = gameRounds.find(r => r.roundNumber === currentRoundForInput);
@@ -48,6 +48,8 @@ export function ScoreInputTable({
 
   const isLastRound = currentRoundForInput === gameRounds[gameRounds.length - 1].roundNumber;
 
+  const roundsToDisplay = gameRounds.filter(roundInfo => roundInfo.roundNumber <= currentRoundForInput);
+
   return (
     <Card className="shadow-xl">
       <CardHeader>
@@ -58,7 +60,7 @@ export function ScoreInputTable({
       <CardContent>
         <div className="overflow-x-auto">
           <Table>
-            <TableCaption>Enter bids and tricks taken for each player.</TableCaption>
+            <TableCaption>Enter bids and tricks taken for each player. Scroll down for totals.</TableCaption>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[80px] font-semibold">Round</TableHead>
@@ -76,11 +78,13 @@ export function ScoreInputTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {gameRounds.map((roundInfo) => {
+              {roundsToDisplay.map((roundInfo) => {
                 const isCurrentInputRound = roundInfo.roundNumber === currentRoundForInput;
-                const isPastRound = roundInfo.roundNumber < currentRoundForInput;
                 return (
-                  <TableRow key={roundInfo.roundNumber} className={isCurrentInputRound ? 'bg-primary/10' : isPastRound ? 'opacity-70' : ''}>
+                  <TableRow 
+                    key={roundInfo.roundNumber} 
+                    className={isCurrentInputRound ? 'bg-primary/10' : 'opacity-70'}
+                  >
                     <TableCell className="font-medium">{roundInfo.roundNumber}</TableCell>
                     <TableCell>{roundInfo.cardsDealt}</TableCell>
                     {playersScoreData.map(player => {
@@ -136,11 +140,11 @@ export function ScoreInputTable({
             </TableFooter>
           </Table>
         </div>
-        <div className="mt-8 flex justify-between items-center gap-4"> {/* Changed to justify-between */}
+        <div className="mt-8 flex justify-between items-center gap-4">
           <Button onClick={onRestartGame} variant="outline" size="lg">
             <RefreshCw className="mr-2 h-5 w-5" /> Restart Game
           </Button>
-          <div className="flex gap-4"> {/* Grouped original buttons */}
+          <div className="flex gap-4">
             {isLastRound ? (
               <Button onClick={onFinishGame} className="bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
                 <CheckCircle className="mr-2 h-5 w-5" /> Finish Game & View Results
@@ -156,3 +160,4 @@ export function ScoreInputTable({
     </Card>
   );
 }
+
