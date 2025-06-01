@@ -1,24 +1,27 @@
 
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption, TableFooter } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode } from '@/lib/types';
-import { ArrowRight, CheckCircle, RefreshCw, UserCheck, Edit3, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle, RefreshCw, UserCheck, Edit3, ShieldCheck, UserCog, Target } from 'lucide-react';
 
 interface ScoreInputTableProps {
   playersScoreData: PlayerScoreData[];
   allPlayers: Player[]; 
+  playerOrderForGame: string[];
   gameRounds: GameRoundInfo[];
   currentRoundForInput: number;
   gamePhase: GamePhase;
   currentRoundInputMode: CurrentRoundInputMode;
   firstDealerPlayerId: string | null;
-  onUpdateScore: (playerId: string, roundNumber: number, bid: string, taken: string) => void;
-  onConfirmBids: () => void;
+  currentDealerId: string | null;
+  currentPlayerBiddingId: string | null;
+  onSubmitBid: (playerId: string, bid: string) => void;
+  onUpdateTaken: (playerId: string, roundNumber: number, taken: string) => void;
   onNextRound: () => void;
   onFinishGame: () => void;
   onRestartGame: () => void;
@@ -28,42 +31,49 @@ interface ScoreInputTableProps {
 export function ScoreInputTable({
   playersScoreData,
   allPlayers,
+  playerOrderForGame,
   gameRounds,
   currentRoundForInput,
   gamePhase,
   currentRoundInputMode,
   firstDealerPlayerId,
-  onUpdateScore,
-  onConfirmBids,
+  currentDealerId,
+  currentPlayerBiddingId,
+  onSubmitBid,
+  onUpdateTaken,
   onNextRound,
   onFinishGame,
   onRestartGame,
   onSelectDealer,
 }: ScoreInputTableProps) {
   
+  const [currentBidValue, setCurrentBidValue] = useState('');
+
   const currentRoundConfig = gameRounds.find(r => r.roundNumber === currentRoundForInput);
-  // Use allPlayers for dealer selection, otherwise use playersScoreData which has scoring info
-  const playersForDisplay = gamePhase === 'DEALER_SELECTION' ? allPlayers.map(p => ({...p, playerId: p.id})) : playersScoreData;
+  const playersForDisplay = gamePhase === 'DEALER_SELECTION' ? allPlayers.map(p => ({...p, playerId: p.id, name: p.name })) : playersScoreData;
+  
+  const currentDealerName = allPlayers.find(p => p.id === currentDealerId)?.name;
+  const currentPlayerBiddingName = allPlayers.find(p => p.id === currentPlayerBiddingId)?.name;
 
-
-  const handleScoreChange = (playerId: string, roundNumber: number, field: 'bid' | 'taken', value: string) => {
-    const playerScore = playersScoreData.find(p => p.playerId === playerId);
-    const roundScore = playerScore?.scores.find(s => s.roundNumber === roundNumber);
-    
-    let bid = roundScore?.bid?.toString() ?? '';
-    let taken = roundScore?.taken?.toString() ?? '';
-
-    if (field === 'bid') bid = value;
-    if (field === 'taken') taken = value;
-    
-    onUpdateScore(playerId, roundNumber, bid, taken);
+  const handleBidInputChange = (value: string) => {
+    setCurrentBidValue(value);
   };
 
-  if (gamePhase === 'SCORING' && !currentRoundConfig) return <p>Loading round configuration...</p>;
+  const handleLocalSubmitBid = () => {
+    if (currentPlayerBiddingId) {
+      onSubmitBid(currentPlayerBiddingId, currentBidValue);
+      setCurrentBidValue(''); // Reset for next bidder
+    }
+  };
+  
+  const handleTakenChange = (playerId: string, roundNumber: number, value: string) => {
+    onUpdateTaken(playerId, roundNumber, value);
+  };
+
+  if (gamePhase === 'SCORING' && !currentRoundConfig && gameRounds.length > 0) return <p>Loading round configuration...</p>;
 
   const isLastRound = currentRoundConfig && gameRounds.length > 0 && currentRoundForInput === gameRounds[gameRounds.length - 1]?.roundNumber;
   
-  // Only display rows for rounds up to and including the current input round
   const roundsToDisplay = gameRounds.filter(roundInfo => roundInfo.roundNumber <= currentRoundForInput);
 
   const getHeaderTitle = () => {
@@ -71,8 +81,14 @@ export function ScoreInputTable({
       return "Select First Dealer";
     }
     if (gamePhase === 'SCORING' && currentRoundConfig) {
-      const phaseText = currentRoundInputMode === 'BIDDING' ? 'Enter Bids' : 'Enter Tricks Taken';
-      return `Score Sheet - Round ${currentRoundForInput} of ${gameRounds.length} (Cards: ${currentRoundConfig.cardsDealt}) - ${phaseText}`;
+      let phaseText = '';
+      if (currentRoundInputMode === 'BIDDING') {
+        phaseText = currentPlayerBiddingName ? `Bidding: ${currentPlayerBiddingName}'s turn` : 'Enter Bids';
+      } else {
+        phaseText = 'Enter Tricks Taken';
+      }
+      const dealerInfo = currentDealerName ? `(Dealer: ${currentDealerName})` : '';
+      return `Score Sheet - Round ${currentRoundForInput} of ${gameRounds.length} (Cards: ${currentRoundConfig.cardsDealt}) ${dealerInfo} - ${phaseText}`;
     }
     return "Score Sheet";
   }
@@ -83,22 +99,26 @@ export function ScoreInputTable({
     }
     if (gamePhase === 'SCORING') {
       if (currentRoundInputMode === 'BIDDING') {
-        return "Enter bids for each player for the current round. Confirm bids to proceed.";
+        return `Player ${currentPlayerBiddingName || 'Next'} is bidding. Other bids will be hidden until all bids are in.`;
       }
-      return "Bids confirmed. Enter tricks taken for each player. Scroll down for totals.";
+      return "All bids are in. Enter tricks taken for each player. Scroll down for totals.";
     }
     return "";
   }
   
-  const getPlayerColumnSubtitle = () => {
+  const getPlayerColumnSubtitle = (playerId: string) => {
     if (gamePhase !== 'SCORING') return '';
-    return currentRoundInputMode === 'BIDDING' ? 'Enter Bid' : 'Bid / Taken → Score';
+    if (currentRoundInputMode === 'BIDDING') {
+      return playerId === currentPlayerBiddingId ? 'Enter Bid' : 'Waiting...';
+    }
+    return 'Bid / Taken → Score';
   }
+
 
   return (
     <Card className="shadow-xl">
       <CardHeader>
-        <CardTitle className="font-headline text-xl sm:text-2xl text-center text-primary-foreground">
+        <CardTitle className="font-headline text-lg sm:text-xl text-center text-primary-foreground">
           {getHeaderTitle()}
         </CardTitle>
       </CardHeader>
@@ -123,9 +143,14 @@ export function ScoreInputTable({
                         onClick={() => onSelectDealer(player.playerId)}
                       >
                         <UserCheck className="mr-2 h-5 w-5 text-accent" /> {player.name}
+                         {currentDealerId === player.playerId && <UserCog className="ml-2 h-4 w-4 text-primary" />}
                       </Button>
                     ) : (
-                      player.name
+                      <>
+                        {player.name}
+                        {currentDealerId === player.playerId && <UserCog className="ml-2 h-4 w-4 inline text-primary-foreground" title="Dealer" />}
+                        {currentPlayerBiddingId === player.playerId && <Target className="ml-2 h-4 w-4 inline text-accent" title="Current Bidder"/>}
+                      </>
                     )}
                   </TableHead>
                 ))}
@@ -136,7 +161,7 @@ export function ScoreInputTable({
                   <TableHead></TableHead>
                   {playersScoreData.map(player => (
                     <TableHead key={`${player.playerId}-subtitle`} className="text-center text-xs text-muted-foreground">
-                       {getPlayerColumnSubtitle()}
+                       {getPlayerColumnSubtitle(player.playerId)}
                     </TableHead>
                   ))}
                 </TableRow>
@@ -156,11 +181,12 @@ export function ScoreInputTable({
                         <TableCell>{roundInfo.cardsDealt}</TableCell>
                         {playersScoreData.map(player => {
                           const scoreEntry = player.scores.find(s => s.roundNumber === roundInfo.roundNumber);
+                          const isCurrentPlayerBiddingThisPlayer = player.playerId === currentPlayerBiddingId;
                           return (
                             <TableCell key={`${player.playerId}-${roundInfo.roundNumber}`} className="text-center">
-                              {isCurrentInputRound ? (
-                                currentRoundInputMode === 'BIDDING' ? (
-                                  <div className="flex items-center justify-center">
+                              {isCurrentInputRound && currentRoundInputMode === 'BIDDING' ? (
+                                <div className="flex items-center justify-center">
+                                  {isCurrentPlayerBiddingThisPlayer ? (
                                     <Input
                                       type="number"
                                       min="0"
@@ -168,32 +194,36 @@ export function ScoreInputTable({
                                       placeholder="Bid"
                                       aria-label={`Bid for ${player.name} round ${roundInfo.roundNumber}`}
                                       className="w-20 h-8 text-center"
-                                      value={scoreEntry?.bid?.toString() ?? ''}
-                                      onChange={(e) => handleScoreChange(player.playerId, roundInfo.roundNumber, 'bid', e.target.value)}
+                                      value={currentBidValue}
+                                      onChange={(e) => handleBidInputChange(e.target.value)}
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    // Display bid if already made, otherwise placeholder
+                                    <span>{scoreEntry?.bid !== null ? scoreEntry?.bid : '...'}</span>
+                                  )}
+                                </div>
+                              ) : isCurrentInputRound && currentRoundInputMode === 'TAKING' ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="flex gap-1 items-center">
+                                    <span className="w-10 h-8 flex items-center justify-center font-medium text-sm">
+                                        {scoreEntry?.bid ?? '-'}
+                                    </span>
+                                    <span className="text-muted-foreground">/</span>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max={roundInfo.cardsDealt.toString()}
+                                      placeholder="Taken"
+                                      aria-label={`Tricks taken by ${player.name} round ${roundInfo.roundNumber}`}
+                                      className="w-16 h-8 text-center"
+                                      value={scoreEntry?.taken?.toString() ?? ''}
+                                      onChange={(e) => handleTakenChange(player.playerId, roundInfo.roundNumber, e.target.value)}
                                     />
                                   </div>
-                                ) : ( // currentRoundInputMode === 'TAKING'
-                                  <div className="flex flex-col items-center gap-1">
-                                    <div className="flex gap-1 items-center">
-                                      <span className="w-10 h-8 flex items-center justify-center font-medium text-sm">
-                                          {scoreEntry?.bid ?? '-'}
-                                      </span>
-                                      <span className="text-muted-foreground">/</span>
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        max={roundInfo.cardsDealt.toString()}
-                                        placeholder="Taken"
-                                        aria-label={`Tricks taken by ${player.name} round ${roundInfo.roundNumber}`}
-                                        className="w-16 h-8 text-center"
-                                        value={scoreEntry?.taken?.toString() ?? ''}
-                                        onChange={(e) => handleScoreChange(player.playerId, roundInfo.roundNumber, 'taken', e.target.value)}
-                                      />
-                                    </div>
-                                    <span className="text-xs text-muted-foreground">→ {scoreEntry?.roundScore ?? 0}</span>
-                                  </div>
-                                )
-                              ) : (
+                                  <span className="text-xs text-muted-foreground">→ {scoreEntry?.roundScore ?? 0}</span>
+                                </div>
+                              ) : ( // Past rounds or future rounds in 'TAKING' mode (though future not shown)
                                 scoreEntry ? `${scoreEntry.bid ?? '-'} / ${scoreEntry.taken ?? '-'} → ${scoreEntry.roundScore}` : '- / - → 0'
                               )}
                             </TableCell>
@@ -224,8 +254,13 @@ export function ScoreInputTable({
             </Button>
             <div className="flex gap-4 w-full sm:w-auto">
               {currentRoundInputMode === 'BIDDING' ? (
-                <Button onClick={onConfirmBids} size="lg" className="bg-green-500 hover:bg-green-600 text-white flex-grow">
-                  <ShieldCheck className="mr-2 h-5 w-5" /> Confirm Bids
+                <Button 
+                  onClick={handleLocalSubmitBid} 
+                  size="lg" 
+                  className="bg-green-500 hover:bg-green-600 text-white flex-grow"
+                  disabled={!currentPlayerBiddingId || currentBidValue === ''}
+                >
+                  <ShieldCheck className="mr-2 h-5 w-5" /> Submit Bid for {currentPlayerBiddingName}
                 </Button>
               ) : isLastRound ? (
                 <Button onClick={onFinishGame} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-grow" size="lg">
