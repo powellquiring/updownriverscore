@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode } from '@/lib/types';
-import { ArrowRight, CheckCircle, RefreshCw, UserCheck, Edit3, ShieldCheck, UserCog, Target, Hash } from 'lucide-react';
+import { ArrowRight, CheckCircle, RefreshCw, UserCheck, ShieldCheck, UserCog, Target } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { NumberInputPad } from './number-input-pad';
 
@@ -92,7 +92,7 @@ export function ScoreInputTable({
     }
     if (gamePhase === 'SCORING') {
       if (currentRoundInputMode === 'BIDDING') {
-        return `Player ${currentPlayerBiddingName || 'Next'} is bidding. Click button to open number pad.`;
+        return `Player ${currentPlayerBiddingName || 'Next'} is bidding. Click their bid display to open number pad.`;
       }
       return "All bids are in. Enter tricks taken for each player. Scroll down for totals.";
     }
@@ -184,7 +184,7 @@ export function ScoreInputTable({
                                     <Popover>
                                       <PopoverTrigger asChild>
                                         <Button variant="outline" className="w-24 h-10">
-                                          {scoreEntry?.bid !== null ? `Bid: ${scoreEntry?.bid}` : 'Enter Bid'}
+                                          {scoreEntry?.bid !== null ? `Bid: ${scoreEntry.bid}` : 'Bid: ...'}
                                         </Button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-auto p-0" align="center">
@@ -198,7 +198,7 @@ export function ScoreInputTable({
                                     </Popover>
                                   ) : (
                                     <span className="w-24 h-10 flex items-center justify-center">
-                                      {scoreEntry?.bid !== null ? scoreEntry?.bid : '...'}
+                                      {scoreEntry?.bid !== null ? `Bid: ${scoreEntry.bid}` : 'Bid: ...'}
                                     </span>
                                   )}
                                 </div>
@@ -212,7 +212,7 @@ export function ScoreInputTable({
                                     <Popover>
                                       <PopoverTrigger asChild>
                                         <Button variant="outline" className="w-24 h-8">
-                                          {scoreEntry?.taken !== null ? `Taken: ${scoreEntry?.taken}` : 'Enter Taken'}
+                                          {scoreEntry?.taken !== null ? `Taken: ${scoreEntry?.taken}` : 'Take: ...'}
                                         </Button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-auto p-0" align="center">
@@ -284,3 +284,5 @@ export function ScoreInputTable({
     </Card>
   );
 }
+
+    
