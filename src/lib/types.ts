@@ -25,3 +25,4 @@ export interface PlayerScoreData {
 }
 
 export type GamePhase = 'SETUP' | 'DEALER_SELECTION' | 'SCORING' | 'RESULTS';
+export type CurrentRoundInputMode = 'BIDDING' | 'TAKING';
