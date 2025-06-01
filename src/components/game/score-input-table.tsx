@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode } from '@/lib/types';
-import { ArrowRight, CheckCircle, RefreshCw, UserCheck, UserCog, Target, Edit3 } from 'lucide-react';
+import { ArrowRight, CheckCircle, RefreshCw, UserCheck, UserCog, Target, Edit3, Check } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { NumberInputPad } from './number-input-pad';
 import { cn } from '@/lib/utils';
@@ -22,8 +22,10 @@ interface ScoreInputTableProps {
   currentDealerId: string | null;
   currentPlayerBiddingId: string | null;
   currentPlayerTakingId: string | null; 
+  currentRoundBidsConfirmed: boolean;
   onSubmitBid: (playerId: string, bid: string) => void;
   onSubmitTaken: (playerId: string, taken: string) => void;
+  onConfirmBidsForRound: () => void;
   onEditHistoricScore: (playerId: string, roundNumber: number, inputType: 'bid' | 'taken', value: string) => void;
   onNextRound: () => void;
   onFinishGame: () => void;
@@ -42,8 +44,10 @@ export function ScoreInputTable({
   currentDealerId,
   currentPlayerBiddingId,
   currentPlayerTakingId,
+  currentRoundBidsConfirmed,
   onSubmitBid,
   onSubmitTaken,
+  onConfirmBidsForRound,
   onEditHistoricScore,
   onNextRound,
   onFinishGame,
@@ -61,9 +65,12 @@ export function ScoreInputTable({
   } | null>(null);
 
   const currentDealerName = allPlayers.find(p => p.id === currentDealerId)?.name;
-  const currentPlayerActiveName = currentRoundInputMode === 'BIDDING' 
-    ? allPlayers.find(p => p.id === currentPlayerBiddingId)?.name
-    : allPlayers.find(p => p.id === currentPlayerTakingId)?.name;
+  let currentPlayerActiveName = '';
+  if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId) {
+    currentPlayerActiveName = allPlayers.find(p => p.id === currentPlayerBiddingId)?.name || '';
+  } else if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId) {
+    currentPlayerActiveName = allPlayers.find(p => p.id === currentPlayerTakingId)?.name || '';
+  }
 
 
   const handleOpenEditPopover = (
@@ -72,10 +79,14 @@ export function ScoreInputTable({
     inputType: 'bid' | 'taken',
     cardsDealt: number
   ) => {
-    if (roundNumber === currentRoundForInput) {
-      if (inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING') return;
-      if (inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING') return;
-    }
+    const isCurrentActiveBidCell = roundNumber === currentRoundForInput && inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING';
+    const isCurrentActiveTakeCell = roundNumber === currentRoundForInput && inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed;
+    
+    if (isCurrentActiveBidCell || isCurrentActiveTakeCell) return; // Don't use popover for direct input cells
+    
+    // Prevent editing "taken" for current round if bids not confirmed
+    if (roundNumber === currentRoundForInput && inputType === 'taken' && !currentRoundBidsConfirmed) return;
+
     setEditingCellDetails({ playerId, roundNumber, inputType, cardsDealt });
   };
   
@@ -91,9 +102,15 @@ export function ScoreInputTable({
     if (gamePhase === 'SCORING' && currentRoundConfig) {
       let phaseText = '';
       if (currentRoundInputMode === 'BIDDING') {
-        phaseText = currentPlayerActiveName ? `Bidding: ${currentPlayerActiveName}'s turn` : 'Enter Bids';
-      } else { // TAKING mode
-        phaseText = currentPlayerActiveName ? `Taking: ${currentPlayerActiveName}'s turn` : 'Enter Tricks Taken';
+        if (currentPlayerBiddingId) {
+            phaseText = `Bidding: ${currentPlayerActiveName}'s turn`;
+        } else if (!currentRoundBidsConfirmed) {
+            phaseText = 'All Bids In! Confirm below to proceed.';
+        } else { // Should not happen if logic is correct, but as a fallback
+            phaseText = 'Bidding Phase Complete';
+        }
+      } else if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
+        phaseText = currentPlayerTakingId ? `Taking: ${currentPlayerActiveName}'s turn` : 'All Tricks Taken!';
       }
       const dealerInfo = currentDealerName ? `(Dealer: ${currentDealerName})` : '';
       return `Score Sheet - Round ${currentRoundForInput} of ${gameRounds.length} (Cards: ${currentRoundConfig.cardsDealt}) ${dealerInfo} - ${phaseText}`;
@@ -104,18 +121,22 @@ export function ScoreInputTable({
   const getTableCaption = () => {
     if (gamePhase === 'DEALER_SELECTION') return "Click player's name to select as first dealer.";
     if (gamePhase === 'SCORING') {
-      if (currentRoundInputMode === 'BIDDING') return `Player ${currentPlayerActiveName || 'Next'} is bidding. Click a number in their column.`;
-      if (currentRoundInputMode === 'TAKING') return `Player ${currentPlayerActiveName || 'Next'} is entering tricks taken. Click a number. Double-click any score to correct.`;
-      return "All tricks taken for this round are entered. Proceed to next round or finish game.";
+      if (currentRoundInputMode === 'BIDDING') {
+        if (currentPlayerBiddingId) return `Player ${currentPlayerActiveName || 'Next'} is bidding. Click a number in their column.`;
+        if (!currentRoundBidsConfirmed) return `All bids for Round ${currentRoundForInput} are recorded. Click the green button below to confirm bids and start entering tricks taken.`;
+      }
+      if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
+        if (currentPlayerTakingId) return `Player ${currentPlayerActiveName || 'Next'} is entering tricks taken. Click a number in their column.`;
+        return `All tricks taken for Round ${currentRoundForInput} are entered. Proceed to next round or finish game. Double-click any score to correct.`;
+      }
+      return "Double-click any score to correct past entries.";
     }
     return "";
   }
   
-  const isPlayerActiveForInput = (playerId: string) => {
-    if (currentRoundInputMode === 'BIDDING') return playerId === currentPlayerBiddingId;
-    if (currentRoundInputMode === 'TAKING') return playerId === currentPlayerTakingId;
-    return false;
-  };
+  const isPlayerActiveForBidding = (playerId: string) => currentRoundInputMode === 'BIDDING' && playerId === currentPlayerBiddingId;
+  const isPlayerActiveForTaking = (playerId: string) => currentRoundInputMode === 'TAKING' && playerId === currentPlayerTakingId && currentRoundBidsConfirmed;
+
 
   return (
     <Card className="shadow-xl">
@@ -142,7 +163,7 @@ export function ScoreInputTable({
                       <>
                         {player.name}
                         {currentDealerId === player.playerId && <UserCog className="ml-2 h-4 w-4 inline text-primary-foreground" title="Dealer" />}
-                        {isPlayerActiveForInput(player.playerId) && <Target className="ml-2 h-4 w-4 inline text-accent" title="Current Turn" />}
+                        {(isPlayerActiveForBidding(player.playerId) || isPlayerActiveForTaking(player.playerId)) && <Target className="ml-2 h-4 w-4 inline text-accent" title="Current Turn" />}
                       </>
                     )}
                   </TableHead>
@@ -154,10 +175,10 @@ export function ScoreInputTable({
                   <TableHead></TableHead>
                   {playersScoreData.map(player => (
                     <TableHead key={`${player.playerId}-subtitle`} className="text-center text-xs text-muted-foreground">
-                      {isPlayerActiveForInput(player.playerId) ? 
-                       (currentRoundInputMode === 'BIDDING' ? 'Enter Bid Below' : 'Enter Tricks Taken Below') 
+                      {(isPlayerActiveForBidding(player.playerId)) ? 'Enter Bid Below' : 
+                       (isPlayerActiveForTaking(player.playerId)) ? 'Enter Tricks Taken Below' 
                        : 'Bid / Taken → Score'}
-                       <Edit3 className="h-3 w-3 inline ml-1 opacity-50" title="Double-click to edit"/>
+                       <Edit3 className="h-3 w-3 inline ml-1 opacity-50" title="Double-click past scores to edit"/>
                     </TableHead>
                   ))}
                 </TableRow>
@@ -167,38 +188,50 @@ export function ScoreInputTable({
               <>
                 <TableBody>
                   {roundsToDisplay.map((roundInfo) => {
-                    const isCurrentInputRound = roundInfo.roundNumber === currentRoundForInput;
+                    const isCurrentDisplayRound = roundInfo.roundNumber === currentRoundForInput;
+                    const isHistoricRound = roundInfo.roundNumber < currentRoundForInput;
+
                     return (
-                      <TableRow key={roundInfo.roundNumber} className={cn(isCurrentInputRound ? 'bg-primary/10' : 'opacity-80 hover:opacity-100')}>
+                    <React.Fragment key={roundInfo.roundNumber}>
+                      <TableRow className={cn(
+                        isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed ? 'bg-primary/10' : '',
+                        isCurrentDisplayRound && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed ? 'bg-secondary/10' : '',
+                        !isCurrentDisplayRound ? 'opacity-80 hover:opacity-100' : ''
+                      )}>
                         <TableCell className="font-medium">{roundInfo.roundNumber}</TableCell>
                         <TableCell>{roundInfo.cardsDealt}</TableCell>
                         {playersScoreData.map(player => {
                           const scoreEntry = player.scores.find(s => s.roundNumber === roundInfo.roundNumber);
-                          const isPlayerActiveForCurrentInput = isPlayerActiveForInput(player.playerId);
                           const cardsForThisRound = roundInfo.cardsDealt;
-
                           const cellKey = `${player.playerId}-${roundInfo.roundNumber}`;
+                          
+                          const showBidInput = isCurrentDisplayRound && isPlayerActiveForBidding(player.playerId);
+                          const showTakeInput = isCurrentDisplayRound && isPlayerActiveForTaking(player.playerId);
+
                           const isEditingThisBid = editingCellDetails?.playerId === player.playerId && editingCellDetails.roundNumber === roundInfo.roundNumber && editingCellDetails.inputType === 'bid';
                           const isEditingThisTake = editingCellDetails?.playerId === player.playerId && editingCellDetails.roundNumber === roundInfo.roundNumber && editingCellDetails.inputType === 'taken';
-
+                          
                           return (
                             <TableCell key={cellKey} className="text-center align-top pt-2 sm:align-middle sm:pt-4">
-                              {isCurrentInputRound && isPlayerActiveForCurrentInput ? (
-                                <div className="min-h-[60px]">
+                              {showBidInput ? (
+                                <div className="min-h-[60px]"> {/* Bid Input Pad */}
                                   <NumberInputPad 
-                                    min={0} 
-                                    max={cardsForThisRound} 
-                                    onSelectNumber={(val) => {
-                                      if (currentRoundInputMode === 'BIDDING') {
-                                        onSubmitBid(player.playerId, val.toString());
-                                      } else if (currentRoundInputMode === 'TAKING') {
-                                        onSubmitTaken(player.playerId, val.toString());
-                                      }
-                                    }}
-                                    currentValue={currentRoundInputMode === 'BIDDING' ? scoreEntry?.bid : scoreEntry?.taken} 
+                                    min={0} max={cardsForThisRound} 
+                                    onSelectNumber={(val) => onSubmitBid(player.playerId, val.toString())}
+                                    currentValue={scoreEntry?.bid} 
+                                  />
+                                  <div className="text-xs text-muted-foreground mt-1">Taken: -</div>
+                                </div>
+                              ) : showTakeInput ? (
+                                <div className="min-h-[60px]"> {/* Take Input Pad */}
+                                  <div className="text-sm mb-1">Bid: {scoreEntry?.bid ?? '-'}</div>
+                                  <NumberInputPad 
+                                    min={0} max={cardsForThisRound} 
+                                    onSelectNumber={(val) => onSubmitTaken(player.playerId, val.toString())}
+                                    currentValue={scoreEntry?.taken} 
                                   />
                                 </div>
-                              ) : (
+                              ) : ( // Displaying historic or non-active scores
                                 <div className="flex flex-col items-center gap-0.5">
                                   <Popover open={isEditingThisBid} onOpenChange={(isOpen) => !isOpen && closeEditPopover()}>
                                     <PopoverTrigger asChild>
@@ -219,7 +252,7 @@ export function ScoreInputTable({
                                       />
                                     </PopoverContent>
                                   </Popover>
-
+                                  
                                   <span className="text-muted-foreground text-xs">/</span>
                                   
                                   <Popover open={isEditingThisTake} onOpenChange={(isOpen) => !isOpen && closeEditPopover()}>
@@ -228,7 +261,7 @@ export function ScoreInputTable({
                                         className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded-md text-sm"
                                         onDoubleClick={() => handleOpenEditPopover(player.playerId, roundInfo.roundNumber, 'taken', cardsForThisRound)}
                                       >
-                                        Taken: {scoreEntry?.taken ?? '-'}
+                                        Taken: {(isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) ? '-' : (scoreEntry?.taken ?? '-')}
                                       </span>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0" align="center">
@@ -248,6 +281,22 @@ export function ScoreInputTable({
                           );
                         })}
                       </TableRow>
+                      {/* Row for "Confirm Bids" button */}
+                      {isCurrentDisplayRound && gamePhase === 'SCORING' && currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
+                        <TableRow className="bg-card border-t border-b border-border">
+                          <TableCell colSpan={2} className="py-1"></TableCell> 
+                          <TableCell colSpan={playersScoreData.length} className="text-center py-2 px-1">
+                            <Button
+                              onClick={onConfirmBidsForRound}
+                              className="w-full bg-green-500 hover:bg-green-600 text-white text-sm font-semibold"
+                              size="sm"
+                            >
+                              <CheckCircle className="mr-2 h-4 w-4" /> All Bids In! Click to Confirm & Enter Tricks Taken
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      </React.Fragment>
                     );
                   })}
                 </TableBody>
@@ -271,19 +320,33 @@ export function ScoreInputTable({
               <RefreshCw className="mr-2 h-5 w-5" /> Restart Game
             </Button>
             <div className="flex gap-4 w-full sm:w-auto">
-              { (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null) || 
-                (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null) ? (
+              { (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null) ? (
                  <div className="flex-grow text-center p-2 text-muted-foreground h-11 items-center justify-center flex">
-                    {currentPlayerActiveName ? `${currentPlayerActiveName} is ${currentRoundInputMode === 'BIDDING' ? 'bidding' : 'entering tricks'}...` : `Waiting for ${currentRoundInputMode}...`}
+                    {currentPlayerActiveName ? `${currentPlayerActiveName} is bidding...` : `Waiting for bids...`}
                  </div>
-              ) : isLastRound ? (
-                <Button onClick={onFinishGame} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-grow" size="lg">
-                  <CheckCircle className="mr-2 h-5 w-5" /> Finish & View Results
-                </Button>
+              ) : (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) ? (
+                 <div className="flex-grow text-center p-2 text-muted-foreground h-11 items-center justify-center flex">
+                    Confirm bids in the table above to proceed...
+                 </div>
+              ) : (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed) ? (
+                 <div className="flex-grow text-center p-2 text-muted-foreground h-11 items-center justify-center flex">
+                    {currentPlayerActiveName ? `${currentPlayerActiveName} is entering tricks...` : `Waiting for tricks taken...`}
+                 </div>
+              ) : (currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed) ? (
+                 isLastRound ? (
+                    <Button onClick={onFinishGame} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-grow" size="lg">
+                      <CheckCircle className="mr-2 h-5 w-5" /> Finish & View Results
+                    </Button>
+                  ) : (
+                    <Button onClick={onNextRound} size="lg" className="flex-grow">
+                      Next Round <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                  )
               ) : (
-                <Button onClick={onNextRound} size="lg" className="flex-grow">
-                  Next Round <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
+                // Fallback or placeholder if no other condition met, or when game setup phase
+                 <div className="flex-grow text-center p-2 text-muted-foreground h-11 items-center justify-center flex">
+                    Game in progress...
+                 </div>
               )}
             </div>
           </div>
