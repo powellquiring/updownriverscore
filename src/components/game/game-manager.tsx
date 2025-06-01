@@ -227,8 +227,7 @@ export function GameManager() {
     const currentBidderIndex = order.indexOf(playerId);
     const nextBidderId = order[(currentBidderIndex + 1) % order.length];
     if (nextBidderId === firstBidderOfRoundId) {
-        setCurrentPlayerBiddingId(null); // All bids are in for this round.
-        // DO NOT switch to TAKING mode yet. Wait for Confirm Bids button.
+        setCurrentPlayerBiddingId(null); 
         toast({ title: "All Bids In!", description: `All bids submitted for Round ${currentRoundForInput}. Click 'Confirm Bids' to proceed.` });
     } else {
         setCurrentPlayerBiddingId(nextBidderId);
@@ -244,7 +243,7 @@ export function GameManager() {
     }
     setCurrentRoundBidsConfirmed(true);
     setCurrentRoundInputMode('TAKING');
-    setCurrentPlayerTakingId(firstBidderOfRoundId); // Start "taking" with the first bidder of the round
+    setCurrentPlayerTakingId(firstBidderOfRoundId); 
     const firstTakerName = players.find(p=> p.id === firstBidderOfRoundId)?.name || 'First Player';
     toast({ title: "Bids Confirmed!", description: `Now enter tricks taken. ${firstTakerName} to start.` });
   }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId, players, toast]);
@@ -281,15 +280,45 @@ export function GameManager() {
     const currentTakerIndex = order.indexOf(playerId);
     const nextTakerId = order[(currentTakerIndex + 1) % order.length];
 
-    if (nextTakerId === firstBidderOfRoundId) { 
-        setCurrentPlayerTakingId(null); 
-        toast({ title: "Tricks Taken Recorded", description: "All tricks for this round are recorded. Proceed to next round or finish." });
+    if (nextTakerId === firstBidderOfRoundId) { // All "taken" counts for this round are in
+        setCurrentPlayerTakingId(null);
+        toast({ title: "Tricks Taken Recorded", description: `All tricks for Round ${currentRoundForInput} recorded.` });
+
+        // Auto-advance logic
+        if (currentRoundForInput < gameRounds.length) {
+            const newRoundNumber = currentRoundForInput + 1;
+            setCurrentRoundForInput(newRoundNumber);
+            
+            const previousDealerIndex = order.indexOf(currentDealerId!); 
+            const newDealerId = order[(previousDealerIndex + 1) % order.length];
+            setCurrentDealerId(newDealerId);
+            
+            const newDealerIndexInOrder = order.indexOf(newDealerId);
+            const newFirstBidderId = order[(newDealerIndexInOrder + 1) % order.length];
+            setCurrentPlayerBiddingId(newFirstBidderId);
+            setFirstBidderOfRoundId(newFirstBidderId);
+            
+            setCurrentRoundInputMode('BIDDING');
+            setCurrentRoundBidsConfirmed(false);
+            
+            const dealerName = players.find(p => p.id === newDealerId)?.name || 'New Dealer';
+            const firstBidderName = players.find(p => p.id === newFirstBidderId)?.name || 'Next';
+            const cardsForNewRound = gameRounds.find(r => r.roundNumber === newRoundNumber)?.cardsDealt;
+            toast({ title: `Starting Round ${newRoundNumber}`, description: `${dealerName} is dealer. Dealing ${cardsForNewRound} cards. ${firstBidderName} to bid.`});
+        } else { // This was the last round
+            setGamePhase('RESULTS');
+            toast({ title: "Game Finished!", description: "All rounds completed. Viewing results." });
+        }
+
     } else {
         setCurrentPlayerTakingId(nextTakerId);
         const nextTakerName = players.find(p => p.id === nextTakerId)?.name || 'Next Player';
         toast({ title: "Tricks Taken Submitted", description: `${nextTakerName}, your turn to enter tricks taken.` });
     }
-  }, [currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, players, toast]);
+  }, [
+    currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, 
+    playerOrderForGame, firstBidderOfRoundId, players, toast, currentDealerId
+  ]);
 
 
   const handleEditHistoricScore = useCallback((
@@ -298,8 +327,6 @@ export function GameManager() {
     inputType: 'bid' | 'taken',
     valueStr: string
   ) => {
-    // Allow editing only if the round is not the current round OR if bids are confirmed for current round (for "taken")
-    // OR if it's a bid in current round but not active bidding player
     const isCurrentRound = roundNumber === currentRoundForInput;
     if (isCurrentRound) {
         if (inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING') {
@@ -350,51 +377,6 @@ export function GameManager() {
     toast({ title: "Score Corrected", description: `${inputType === 'bid' ? 'Bid' : 'Tricks taken'} for ${playerName} in round ${roundNumber} updated to ${value}.` });
   }, [gameRounds, players, toast, currentRoundForInput, currentPlayerBiddingId, currentPlayerTakingId, currentRoundInputMode, currentRoundBidsConfirmed]);
 
-  const handleNextRound = useCallback(() => {
-    if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null) {
-      toast({ title: "Bidding in Progress", description: "Complete all bids first.", variant: "destructive" }); return;
-    }
-    if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) {
-      toast({ title: "Confirm Bids", description: "Please confirm bids for the current round first.", variant: "destructive" }); return;
-    }
-    if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null) {
-      toast({ title: "Taking in Progress", description: "Complete all tricks taken entries.", variant: "destructive"}); return;
-    }
-
-    const currentRoundDataIsValid = playersScoreData.every(player => {
-        const roundEntry = player.scores.find(s => s.roundNumber === currentRoundForInput);
-        return roundEntry && roundEntry.bid !== null && roundEntry.taken !== null;
-    });
-
-    if (!currentRoundDataIsValid) {
-        toast({ title: "Missing Scores", description: "Enter bids and tricks taken for all players.", variant: "destructive" }); return;
-    }
-    if (!currentRoundBidsConfirmed) {
-       toast({ title: "Confirm Bids", description: "Please confirm bids for the current round first.", variant: "destructive" }); return;
-    }
-
-
-    if (currentRoundForInput < gameRounds.length) {
-      const newRoundNumber = currentRoundForInput + 1;
-      setCurrentRoundForInput(newRoundNumber);
-      const order = playerOrderForGame;
-      const previousDealerIndex = order.indexOf(currentDealerId!);
-      const newDealerId = order[(previousDealerIndex + 1) % order.length];
-      setCurrentDealerId(newDealerId);
-      const newDealerIndexInOrder = order.indexOf(newDealerId);
-      const newFirstBidderId = order[(newDealerIndexInOrder + 1) % order.length];
-      setCurrentPlayerBiddingId(newFirstBidderId); setFirstBidderOfRoundId(newFirstBidderId);
-      setCurrentPlayerTakingId(null); 
-      setCurrentRoundInputMode('BIDDING'); 
-      setCurrentRoundBidsConfirmed(false);
-      const dealerName = players.find(p => p.id === newDealerId)?.name || 'New Dealer';
-      const firstBidderName = players.find(p => p.id === newFirstBidderId)?.name || 'Next';
-      toast({ title: `Round ${newRoundNumber}`, description: `${dealerName} is dealer. Dealing ${gameRounds.find(r => r.roundNumber === newRoundNumber)?.cardsDealt} cards. ${firstBidderName} to bid.`});
-    } else {
-      setGamePhase('RESULTS');
-      toast({ title: "Game Finished!", description: "All rounds completed." });
-    }
-  }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, playersScoreData, playerOrderForGame, currentDealerId, players, toast]);
 
   const handleFinishGame = useCallback(() => {
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && gamePhase === 'SCORING') {
@@ -417,7 +399,7 @@ export function GameManager() {
        toast({ title: "Confirm Bids", description: "Please confirm bids for the current round first before finishing.", variant: "destructive" }); return;
     }
     setGamePhase('RESULTS');
-    toast({ title: "Game Finished!", description: "Final scores." });
+    toast({ title: "Game Finished Early!", description: "Displaying current scores." });
   }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, toast, playersScoreData, currentRoundForInput, gameRounds, gamePhase]);
 
   if (gamePhase === 'SETUP') {
@@ -452,7 +434,6 @@ export function GameManager() {
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}
         onEditHistoricScore={handleEditHistoricScore}
-        onNextRound={handleNextRound}
         onFinishGame={handleFinishGame}
         onRestartGame={handlePlayAgain}
         onSelectDealer={handleSelectDealer}
@@ -470,3 +451,4 @@ export function GameManager() {
     </div>
   );
 }
+
