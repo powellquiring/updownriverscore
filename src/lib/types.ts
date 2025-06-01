@@ -30,3 +30,4 @@ export type CurrentRoundInputMode = 'BIDDING' | 'TAKING';
 // Props for ScoreInputTable might need adjustment if these new states are passed down directly
 // or handled via existing structures. For now, keeping GameManager responsible.
 
+

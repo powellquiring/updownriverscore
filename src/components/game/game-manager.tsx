@@ -60,7 +60,7 @@ export function GameManager() {
   const [currentRoundBidsConfirmed, setCurrentRoundBidsConfirmed] = useState<boolean>(false);
 
   const { toast } = useToast();
-
+  
   const handlePlayAgain = useCallback(() => {
     setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
     setGameRounds([]);
@@ -79,6 +79,7 @@ export function GameManager() {
     localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
     toast({ title: "New Game Setup", description: "Configure game and add players to start again." });
   }, [toast]);
+
 
   useEffect(() => {
     const savedState = localStorage.getItem('updownRiverScorerState');
@@ -116,6 +117,10 @@ export function GameManager() {
         localStorage.removeItem('updownRiverScorerState'); 
         setGamePhase('SETUP'); 
         setPlayers(defaultPlayers);
+        // Call handlePlayAgain directly if it's already defined and safe to call.
+        // If handlePlayAgain itself relies on state that might not be initialized yet during this effect,
+        // then a simpler reset or just logging the error and setting default phase/players is safer.
+        // For now, assuming it's safe or this effect runs after its definition.
         handlePlayAgain(); 
       }
     }
@@ -202,7 +207,9 @@ export function GameManager() {
     setCurrentRoundInputMode('BIDDING'); setGamePhase('SCORING');
     const dealerName = players.find(p => p.id === playerId)?.name || 'Selected';
     const firstBidderName = players.find(p => p.id === firstBidder)?.name || 'Next';
-    toast({ title: "Dealer Selected", description: `${dealerName} is dealer. Round 1 (${gameRounds[0]?.cardsDealt} cards). ${firstBidderName} to bid.` });
+    const currentRoundInfo = gameRounds.find(r => r.roundNumber === 1);
+    const cardsDealt = currentRoundInfo ? currentRoundInfo.cardsDealt : 'N/A';
+    toast({ title: "Dealer Selected", description: `${dealerName} is dealer. Round 1 (${cardsDealt} cards). ${firstBidderName} to bid.` });
   }, [players, gameRounds, toast, playerOrderForGame]);
 
   const handleSubmitBid = useCallback((playerId: string, bidStr: string) => {
@@ -220,10 +227,8 @@ export function GameManager() {
     // "Screw the Dealer" rule: If this player is the dealer, their bid cannot make the total bids equal cards dealt.
     if (playerId === currentDealerId && currentRoundCards !== undefined) {
         const sumOfOtherPlayerBids = playersScoreData.reduce((sum, pData) => {
-            if (pData.playerId !== playerId) { // Sum bids of players OTHER than the current dealer/bidder
+            if (pData.playerId !== playerId) { 
                 const scoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
-                // Ensure other players have bid; if not, this rule might not apply yet or might be miscalculated.
-                // This check assumes other players' bids are finalized.
                 return sum + (scoreEntry?.bid ?? 0); 
             }
             return sum;
@@ -235,7 +240,7 @@ export function GameManager() {
                 description: `Total bids (${sumOfOtherPlayerBids + bid}) cannot equal cards dealt (${currentRoundCards}). Please choose another bid.`,
                 variant: "destructive",
             });
-            return; // Stop bid submission
+            return; 
         }
     }
     
@@ -243,7 +248,7 @@ export function GameManager() {
         prevData.map(pd => pd.playerId === playerId ? {
             ...pd,
             scores: pd.scores.map(s => s.roundNumber === currentRoundForInput ? { ...s, bid: bid, roundScore: calculateRoundScore(bid, s.taken) } : s),
-            totalScore: pd.scores.reduce((sum, entry) => sum + (entry.roundNumber === currentRoundForInput ? calculateRoundScore(bid, entry.taken) : entry.roundScore), 0)
+            totalScore: pd.scores.reduce((sum, entry) => sum + (entry.roundNumber === currentRoundForInput ? calculateRoundScore(bid, entry.taken) : entry.roundScore), 0) // Recalculate total score
           } : pd
         )
     );
@@ -251,7 +256,7 @@ export function GameManager() {
     const currentBidderIndex = order.indexOf(playerId);
     const nextBidderId = order[(currentBidderIndex + 1) % order.length];
 
-    if (nextBidderId === firstBidderOfRoundId) { // All players have bid for this round.
+    if (nextBidderId === firstBidderOfRoundId) { 
         setCurrentPlayerBiddingId(null); 
         toast({ title: "All Bids In!", description: `All bids submitted for Round ${currentRoundForInput}. Click 'Confirm Bids' to proceed.` });
     } else {
@@ -278,10 +283,46 @@ export function GameManager() {
         toast({title: "Not your turn or bids not confirmed", description: "Wait for your turn or confirm bids.", variant: "destructive"}); return;
     }
     const taken = parseInt(takenStr, 10);
-    const cardsInCurrentRound = gameRounds.find(r => r.roundNumber === currentRoundForInput)?.cardsDealt;
+    const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
+    const cardsInCurrentRound = currentRoundInfo?.cardsDealt;
+
     if (isNaN(taken) || taken < 0 || (cardsInCurrentRound !== undefined && taken > cardsInCurrentRound)) {
       toast({ title: "Invalid Taken", description: `Tricks taken must be 0 to ${cardsInCurrentRound}.`, variant: "destructive"});
       return;
+    }
+
+    // Additional check for sum of taken tricks (enforced by UI, but good to have server-side)
+    if (cardsInCurrentRound !== undefined) {
+        let sumOfTakesByPreviousPlayers = 0;
+        const order = playerOrderForGame;
+        const currentPlayerIndex = order.indexOf(playerId);
+
+        for (let i = 0; i < currentPlayerIndex; i++) {
+            const pId = order[i];
+            const pData = playersScoreData.find(psd => psd.playerId === pId);
+            const scoreEntry = pData?.scores.find(s => s.roundNumber === currentRoundForInput);
+            if (scoreEntry?.taken !== null && scoreEntry?.taken !== undefined) {
+                 sumOfTakesByPreviousPlayers += scoreEntry.taken;
+            }
+        }
+         if (sumOfTakesByPreviousPlayers + taken > cardsInCurrentRound) {
+             toast({ title: "Invalid Taken Count", description: `Total tricks taken cannot exceed ${cardsInCurrentRound}.`, variant: "destructive"});
+             return;
+         }
+         // If this is the last player (dealer), their 'taken' count must make the sum equal cardsInCurrentRound
+         if (playerId === currentDealerId) {
+            const sumOfOtherPlayersTakes = playersScoreData.reduce((sum, pData) => {
+                if (pData.playerId !== playerId) {
+                    const scoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
+                    return sum + (scoreEntry?.taken ?? 0);
+                }
+                return sum;
+            }, 0);
+             if (sumOfOtherPlayersTakes + taken !== cardsInCurrentRound) {
+                 toast({ title: "Invalid Taken for Dealer", description: `Dealer's tricks must make total taken equal ${cardsInCurrentRound}. Current total would be ${sumOfOtherPlayersTakes + taken}.`, variant: "destructive"});
+                 return; // This should be prevented by UI if min=max for dealer's NumberInputPad
+             }
+         }
     }
     
     setPlayersScoreData(prevData =>
@@ -304,11 +345,9 @@ export function GameManager() {
     const currentTakerIndex = order.indexOf(playerId);
     const nextTakerId = order[(currentTakerIndex + 1) % order.length];
 
-    if (nextTakerId === firstBidderOfRoundId) { // All "taken" counts for this round are in
-        setCurrentPlayerTakingId(null); // No one is actively taking
-        //toast({ title: "Tricks Taken Recorded", description: `All tricks for Round ${currentRoundForInput} recorded.` }); // Temporarily remove for auto-advance
+    if (nextTakerId === firstBidderOfRoundId) { 
+        setCurrentPlayerTakingId(null); 
 
-        // Auto-advance logic
         if (currentRoundForInput < gameRounds.length) {
             const newRoundNumber = currentRoundForInput + 1;
             setCurrentRoundForInput(newRoundNumber);
@@ -323,13 +362,13 @@ export function GameManager() {
             setFirstBidderOfRoundId(newFirstBidderId);
             
             setCurrentRoundInputMode('BIDDING');
-            setCurrentRoundBidsConfirmed(false); // Reset for the new round
+            setCurrentRoundBidsConfirmed(false); 
             
             const dealerName = players.find(p => p.id === newDealerId)?.name || 'New Dealer';
             const firstBidderName = players.find(p => p.id === newFirstBidderId)?.name || 'Next';
             const cardsForNewRound = gameRounds.find(r => r.roundNumber === newRoundNumber)?.cardsDealt;
             toast({ title: `Starting Round ${newRoundNumber}`, description: `${dealerName} is dealer. Dealing ${cardsForNewRound} cards. ${firstBidderName} to bid.`});
-        } else { // This was the last round
+        } else { 
             setGamePhase('RESULTS');
             toast({ title: "Game Finished!", description: "All rounds completed. Viewing results." });
         }
@@ -341,7 +380,7 @@ export function GameManager() {
     }
   }, [
     currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, 
-    playerOrderForGame, firstBidderOfRoundId, players, toast, currentDealerId
+    playerOrderForGame, firstBidderOfRoundId, players, toast, currentDealerId, playersScoreData
   ]);
 
   const handleEditHistoricScore = useCallback((
@@ -364,21 +403,17 @@ export function GameManager() {
     }
 
     const value = parseInt(valueStr, 10);
-    const cardsForRound = gameRounds.find(r => r.roundNumber === roundNumber)?.cardsDealt;
+    const roundConfig = gameRounds.find(r => r.roundNumber === roundNumber);
+    const cardsForRound = roundConfig?.cardsDealt;
 
     if (isNaN(value) || value < 0 || (cardsForRound !== undefined && value > cardsForRound)) {
       toast({ title: "Invalid Edit", description: `Entry must be between 0 and ${cardsForRound ?? 'max'}.`, variant: "destructive" });
       return;
     }
     
-    // For historic bid edits, check the "Screw the Dealer" rule for the dealer of that historic round.
-    if (inputType === 'bid') {
+    // Historic bid edit: "Screw the Dealer" rule
+    if (inputType === 'bid' && cardsForRound !== undefined) {
         const order = playerOrderForGame;
-        const dealerForHistoricRound = order[(order.indexOf(firstBidderOfRoundId!) -1 + order.length + (roundNumber -1) * (order.length -1) ) % order.length]; //This logic is complex and needs verification. Simpler: find dealer based on round number.
-        
-        // Simplified: Find the dealer ID for the specific historic round.
-        // Dealer rotates each round. `firstDealerPlayerId` is for round 1.
-        // For round `N`, dealer is `(indexOf_firstDealer + N - 1) % numPlayers`.
         let historicDealerId = null;
         if (firstDealerPlayerId && order.length > 0) {
             const firstDealerIndex = order.indexOf(firstDealerPlayerId);
@@ -387,7 +422,7 @@ export function GameManager() {
             }
         }
 
-        if (playerId === historicDealerId && cardsForRound !== undefined) {
+        if (playerId === historicDealerId) {
             const sumOfOtherPlayerBidsHistoric = playersScoreData.reduce((sum, pData) => {
                 if (pData.playerId !== playerId) {
                     const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
@@ -399,7 +434,7 @@ export function GameManager() {
             if (sumOfOtherPlayerBidsHistoric + value === cardsForRound) {
                 toast({
                     title: "Invalid Historic Bid Edit",
-                    description: `For Round ${roundNumber}, total bids (${sumOfOtherPlayerBidsHistoric + value}) cannot equal cards dealt (${cardsForRound}).`,
+                    description: `For Round ${roundNumber}, dealer's bid makes total bids (${sumOfOtherPlayerBidsHistoric + value}) equal cards dealt (${cardsForRound}).`,
                     variant: "destructive",
                 });
                 return;
@@ -407,13 +442,32 @@ export function GameManager() {
         }
     }
 
+    // Historic "taken" edit: Ensure sum of taken equals cards dealt
+     if (inputType === 'taken' && cardsForRound !== undefined) {
+        const sumOfOtherTakesInHistoricRound = playersScoreData.reduce((sum, pData) => {
+            if (pData.playerId !== playerId) { // Sum taken by players OTHER than the one being edited
+                const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
+                return sum + (scoreEntry?.taken ?? 0);
+            }
+            return sum;
+        }, 0);
+
+        // The new value for the edited player, when added to others, MUST equal cardsForRound
+        if (sumOfOtherTakesInHistoricRound + value !== cardsForRound) {
+            toast({
+                title: "Invalid Historic Taken Edit",
+                description: `For Round ${roundNumber}, total tricks taken must equal ${cardsForRound}. With this change, total would be ${sumOfOtherTakesInHistoricRound + value}. Adjust other players' taken counts first if needed.`,
+                variant: "destructive",
+            });
+            return; // Prevent the edit if it violates the sum rule
+        }
+    }
+
 
     setPlayersScoreData(prevData =>
       prevData.map(playerData => {
         if (playerData.playerId === playerId) {
-          let newTotalScore = 0; // Recalculate total score from scratch
           const updatedScores = playerData.scores.map(scoreEntry => {
-            let newRoundScore = scoreEntry.roundScore;
             if (scoreEntry.roundNumber === roundNumber) {
               let newBid = scoreEntry.bid;
               let newTaken = scoreEntry.taken;
@@ -421,13 +475,12 @@ export function GameManager() {
               if (inputType === 'bid') newBid = value;
               else newTaken = value;
               
-              newRoundScore = calculateRoundScore(newBid, newTaken);
+              const newRoundScore = calculateRoundScore(newBid, newTaken);
               return { ...scoreEntry, bid: newBid, taken: newTaken, roundScore: newRoundScore };
             }
-            return scoreEntry; // Return existing score entry for other rounds
+            return scoreEntry; 
           });
-          // Recalculate total score based on all updatedScores for this player
-          newTotalScore = updatedScores.reduce((sum, entry) => sum + entry.roundScore, 0);
+          const newTotalScore = updatedScores.reduce((sum, entry) => sum + entry.roundScore, 0);
           return { ...playerData, scores: updatedScores, totalScore: newTotalScore };
         }
         return playerData;
@@ -448,16 +501,16 @@ export function GameManager() {
     if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && gamePhase === 'SCORING') {
         toast({ title: "Taking in Progress", description: "Complete all tricks taken entries first.", variant: "destructive"}); return;
     }
-    // Check if current round data is complete only if game is in SCORING phase and not yet at the end of rounds
+    
     if (gamePhase === 'SCORING' && currentRoundForInput <= gameRounds.length) {
         const currentRoundDataIsValid = playersScoreData.every(player => {
             const roundEntry = player.scores.find(s => s.roundNumber === currentRoundForInput);
             return roundEntry && roundEntry.bid !== null && roundEntry.taken !== null;
         });
-        if (!currentRoundDataIsValid ) {
-             toast({ title: "Missing Scores", description: "Complete current round's bids and tricks first.", variant: "destructive" }); return;
+        if (!currentRoundDataIsValid && currentPlayerTakingId === null && currentRoundBidsConfirmed ) { // Check only if taking should be complete
+             toast({ title: "Missing Scores", description: "Complete current round's tricks taken first.", variant: "destructive" }); return;
         }
-        if (!currentRoundBidsConfirmed) {
+        if (!currentRoundBidsConfirmed && currentPlayerBiddingId === null) { // Bids are in but not confirmed
            toast({ title: "Confirm Bids", description: "Please confirm bids for the current round first before finishing.", variant: "destructive" }); return;
         }
     }
@@ -477,18 +530,14 @@ export function GameManager() {
         totalScore: 0
     }));
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
-    if (!currentRoundInfo && gamePhase === 'SCORING') { 
-        // This case should ideally not happen if gameRounds is populated.
-        // If it does, it implies a state inconsistency. Resetting might be aggressive.
-        // Consider just showing an error or trying to recover.
-        // For now, the original reset:
+    if (!currentRoundInfo && gamePhase === 'SCORING' && gameRounds.length > 0) { 
         handlePlayAgain(); 
         return <p>Error loading round data. Resetting game...</p>;
     }
     return (
       <ScoreInputTable
         playersScoreData={activePlayersScoreData}
-        allPlayers={players} // Pass all players for name lookups
+        allPlayers={players} 
         playerOrderForGame={playerOrderForGame}
         gameRounds={gameRounds}
         currentRoundForInput={currentRoundForInput}
@@ -498,6 +547,7 @@ export function GameManager() {
         currentPlayerBiddingId={currentPlayerBiddingId}
         currentPlayerTakingId={currentPlayerTakingId}
         currentRoundBidsConfirmed={currentRoundBidsConfirmed}
+        firstBidderOfRoundId={firstBidderOfRoundId}
         onSubmitBid={handleSubmitBid}
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}
@@ -519,3 +569,4 @@ export function GameManager() {
     </div>
   );
 }
+
