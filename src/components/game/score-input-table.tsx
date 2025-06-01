@@ -70,7 +70,6 @@ export function ScoreInputTable({
     currentPlayerActiveName = allPlayers.find(p => p.id === currentPlayerTakingId)?.name || '';
   }
 
-
   const handleOpenEditPopover = (
     playerId: string,
     roundNumber: number,
@@ -81,7 +80,6 @@ export function ScoreInputTable({
     const isCurrentActiveTakeCell = roundNumber === currentRoundForInput && inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed;
     
     if (isCurrentActiveBidCell || isCurrentActiveTakeCell) return; 
-    
     if (roundNumber === currentRoundForInput && inputType === 'taken' && !currentRoundBidsConfirmed) return;
 
     setEditingCellDetails({ playerId, roundNumber, inputType, cardsDealt });
@@ -130,7 +128,7 @@ export function ScoreInputTable({
     return "";
   }
   
-  const isPlayerActiveForBidding = (playerId: string) => currentRoundInputMode === 'BIDDING' && playerId === currentPlayerBiddingId;
+  const isPlayerActiveForBidding = (playerId: string) => currentRoundInputMode === 'BIDDING' && playerId === currentPlayerBiddingId && !currentRoundBidsConfirmed;
   const isPlayerActiveForTaking = (playerId: string) => currentRoundInputMode === 'TAKING' && playerId === currentPlayerTakingId && currentRoundBidsConfirmed;
 
 
@@ -199,24 +197,40 @@ export function ScoreInputTable({
                           const cardsForThisRound = roundInfo.cardsDealt;
                           const cellKey = `${player.playerId}-${roundInfo.roundNumber}`;
                           
-                          const showBidInput = isCurrentDisplayRound && isPlayerActiveForBidding(player.playerId);
-                          const showTakeInput = isCurrentDisplayRound && isPlayerActiveForTaking(player.playerId);
+                          const showBidInputDirectly = isCurrentDisplayRound && isPlayerActiveForBidding(player.playerId);
+                          const showTakeInputDirectly = isCurrentDisplayRound && isPlayerActiveForTaking(player.playerId);
 
                           const isEditingThisBid = editingCellDetails?.playerId === player.playerId && editingCellDetails.roundNumber === roundInfo.roundNumber && editingCellDetails.inputType === 'bid';
                           const isEditingThisTake = editingCellDetails?.playerId === player.playerId && editingCellDetails.roundNumber === roundInfo.roundNumber && editingCellDetails.inputType === 'taken';
                           
+                          let excludeNumberForPad: number | null = null;
+                          if (showBidInputDirectly && player.playerId === currentDealerId) {
+                              const sumOfOtherPlayerBids = playersScoreData.reduce((sum, pData) => {
+                                  if (pData.playerId !== player.playerId) {
+                                      const otherScoreEntry = pData.scores.find(s => s.roundNumber === roundInfo.roundNumber);
+                                      return sum + (otherScoreEntry?.bid ?? 0);
+                                  }
+                                  return sum;
+                              }, 0);
+                              const forbiddenBid = cardsForThisRound - sumOfOtherPlayerBids;
+                              if (forbiddenBid >= 0 && forbiddenBid <= cardsForThisRound) {
+                                  excludeNumberForPad = forbiddenBid;
+                              }
+                          }
+
                           return (
                             <TableCell key={cellKey} className="text-center align-top pt-2 sm:align-middle sm:pt-4">
-                              {showBidInput ? (
+                              {showBidInputDirectly ? (
                                 <div className="min-h-[60px]">
                                   <NumberInputPad 
                                     min={0} max={cardsForThisRound} 
                                     onSelectNumber={(val) => onSubmitBid(player.playerId, val.toString())}
-                                    currentValue={scoreEntry?.bid} 
+                                    currentValue={scoreEntry?.bid}
+                                    excludeNumber={excludeNumberForPad}
                                   />
                                   <div className="text-xs text-muted-foreground mt-1">Taken: -</div>
                                 </div>
-                              ) : showTakeInput ? (
+                              ) : showTakeInputDirectly ? (
                                 <div className="min-h-[60px]"> 
                                   <div className="text-sm mb-1">Bid: {scoreEntry?.bid ?? '-'}</div>
                                   <NumberInputPad 
@@ -320,7 +334,11 @@ export function ScoreInputTable({
                     variant="destructive" 
                     size="lg" 
                     className="w-full sm:w-auto"
-                    disabled={currentPlayerBiddingId !== null || (currentPlayerTakingId !== null && currentRoundBidsConfirmed)} 
+                    disabled={
+                      (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null) ||
+                      (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) ||
+                      (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed)
+                    }
                 >
                     <Flag className="mr-2 h-5 w-5" /> Finish Game Early
                 </Button>
@@ -353,4 +371,3 @@ export function ScoreInputTable({
     </Card>
   );
 }
-
