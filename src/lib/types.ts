@@ -19,9 +19,9 @@ export interface RoundScoreEntry {
 
 export interface PlayerScoreData {
   playerId: string;
-  name: string;
+  name:string;
   scores: RoundScoreEntry[];
   totalScore: number;
 }
 
-export type GamePhase = 'SETUP' | 'SCORING' | 'RESULTS';
+export type GamePhase = 'SETUP' | 'DEALER_SELECTION' | 'SCORING' | 'RESULTS';
