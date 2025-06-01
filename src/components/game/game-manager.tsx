@@ -56,11 +56,12 @@ export function GameManager() {
   const [currentDealerId, setCurrentDealerId] = useState<string | null>(null);
   const [currentPlayerBiddingId, setCurrentPlayerBiddingId] = useState<string | null>(null);
   const [firstBidderOfRoundId, setFirstBidderOfRoundId] = useState<string | null>(null);
+  const [currentPlayerTakingId, setCurrentPlayerTakingId] = useState<string | null>(null);
 
   const { toast } = useToast();
 
   const handlePlayAgain = useCallback(() => {
-    setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers); // Keep existing players if any, else default
+    setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
     setGameRounds([]);
     setPlayersScoreData([]);
     setCurrentRoundForInput(1);
@@ -71,6 +72,7 @@ export function GameManager() {
     setCurrentDealerId(null);
     setCurrentPlayerBiddingId(null);
     setFirstBidderOfRoundId(null);
+    setCurrentPlayerTakingId(null);
     localStorage.removeItem('updownRiverScorerState'); 
     localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
     toast({ title: "New Game Setup", description: "Configure game and add players to start again." });
@@ -104,13 +106,14 @@ export function GameManager() {
         if (state.currentDealerId && typeof state.currentDealerId === 'string') setCurrentDealerId(state.currentDealerId);
         if (state.currentPlayerBiddingId && typeof state.currentPlayerBiddingId === 'string') setCurrentPlayerBiddingId(state.currentPlayerBiddingId);
         if (state.firstBidderOfRoundId && typeof state.firstBidderOfRoundId === 'string') setFirstBidderOfRoundId(state.firstBidderOfRoundId);
+        if (state.currentPlayerTakingId && typeof state.currentPlayerTakingId === 'string') setCurrentPlayerTakingId(state.currentPlayerTakingId);
 
       } catch (error) {
         console.error("Failed to load saved state:", error);
         localStorage.removeItem('updownRiverScorerState'); 
         setGamePhase('SETUP'); 
         setPlayers(defaultPlayers);
-        handlePlayAgain(); // Reset to initial setup state
+        handlePlayAgain(); 
       }
     }
   }, [handlePlayAgain]); 
@@ -128,11 +131,11 @@ export function GameManager() {
     const stateToSave = {
       players, gameRounds, playersScoreData, currentRoundForInput, gamePhase,
       firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId,
-      currentPlayerBiddingId, firstBidderOfRoundId,
+      currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId,
     };
     localStorage.setItem('updownRiverScorerState', JSON.stringify(stateToSave));
     if (gamePhase !== 'SETUP') localStorage.setItem('updownRiverScorerState_gameStartedOnce', 'true');
-  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, firstBidderOfRoundId]);
+  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId]);
 
 
   const handleAddPlayer = useCallback((name: string) => {
@@ -156,9 +159,11 @@ export function GameManager() {
         setGamePhase('SETUP'); return;
     }
     setGameRounds(roundsConfig);
-    setPlayerOrderForGame(players.map(p => p.id));
+    
+    const currentPlayers = players.length > 0 ? players : defaultPlayers;
+    setPlayerOrderForGame(currentPlayers.map(p => p.id));
 
-    const initialScores: PlayerScoreData[] = players.map(player => ({
+    const initialScores: PlayerScoreData[] = currentPlayers.map(player => ({
       playerId: player.id, name: player.name,
       scores: roundsConfig.map(r => ({ roundNumber: r.roundNumber, bid: null, taken: null, roundScore: 0 })),
       totalScore: 0,
@@ -166,7 +171,7 @@ export function GameManager() {
     setPlayersScoreData(initialScores);
     setCurrentRoundForInput(1);
     setFirstDealerPlayerId(null); setCurrentDealerId(null);
-    setCurrentPlayerBiddingId(null); setFirstBidderOfRoundId(null);
+    setCurrentPlayerBiddingId(null); setFirstBidderOfRoundId(null); setCurrentPlayerTakingId(null);
     setCurrentRoundInputMode('BIDDING');
     setGamePhase('DEALER_SELECTION');
     toast({ title: "Game Ready!", description: `Please select the dealer for the first round.` });
@@ -186,6 +191,7 @@ export function GameManager() {
     }
     const firstBidder = order[(dealerIndex + 1) % order.length];
     setCurrentPlayerBiddingId(firstBidder); setFirstBidderOfRoundId(firstBidder);
+    setCurrentPlayerTakingId(null);
     setCurrentRoundInputMode('BIDDING'); setGamePhase('SCORING');
     const dealerName = players.find(p => p.id === playerId)?.name || 'Selected';
     const firstBidderName = players.find(p => p.id === firstBidder)?.name || 'Next';
@@ -214,7 +220,9 @@ export function GameManager() {
     const nextBidderId = order[(currentBidderIndex + 1) % order.length];
     if (nextBidderId === firstBidderOfRoundId) {
         setCurrentRoundInputMode('TAKING'); setCurrentPlayerBiddingId(null);
-        toast({ title: "All Bids In!", description: "Enter tricks taken." });
+        setCurrentPlayerTakingId(firstBidderOfRoundId); // Start "taking" with the first bidder
+        const firstTakerName = players.find(p=> p.id === firstBidderOfRoundId)?.name || 'First Player';
+        toast({ title: "All Bids In!", description: `Enter tricks taken. ${firstTakerName} to start.` });
     } else {
         setCurrentPlayerBiddingId(nextBidderId);
         const nextBidderName = players.find(p => p.id === nextBidderId)?.name || 'Next Player';
@@ -222,13 +230,17 @@ export function GameManager() {
     }
   }, [currentPlayerBiddingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, players, toast]);
 
-  const handleUpdateTakenInCurrentRound = useCallback((playerId: string, takenStr: string) => {
+  const handleSubmitTaken = useCallback((playerId: string, takenStr: string) => {
+    if (playerId !== currentPlayerTakingId) {
+        toast({title: "Not your turn", description: "Wait for your turn to enter tricks taken.", variant: "destructive"}); return;
+    }
     const taken = parseInt(takenStr, 10);
     const cardsInCurrentRound = gameRounds.find(r => r.roundNumber === currentRoundForInput)?.cardsDealt;
     if (isNaN(taken) || taken < 0 || (cardsInCurrentRound !== undefined && taken > cardsInCurrentRound)) {
       toast({ title: "Invalid Taken", description: `Tricks taken must be 0 to ${cardsInCurrentRound}.`, variant: "destructive"});
       return;
     }
+    
     setPlayersScoreData(prevData =>
       prevData.map(playerData => {
         if (playerData.playerId === playerId) {
@@ -244,7 +256,21 @@ export function GameManager() {
         return playerData;
       })
     );
-  }, [gameRounds, currentRoundForInput, toast]);
+
+    const order = playerOrderForGame;
+    const currentTakerIndex = order.indexOf(playerId);
+    const nextTakerId = order[(currentTakerIndex + 1) % order.length];
+
+    if (nextTakerId === firstBidderOfRoundId) { // firstBidderOfRoundId is also the firstTakerOfRound
+        setCurrentPlayerTakingId(null); // All "taken" entries are done for this round
+        toast({ title: "Tricks Taken Recorded", description: "All tricks for this round are recorded. Proceed to next round or finish." });
+    } else {
+        setCurrentPlayerTakingId(nextTakerId);
+        const nextTakerName = players.find(p => p.id === nextTakerId)?.name || 'Next Player';
+        toast({ title: "Tricks Taken Submitted", description: `${nextTakerName}, your turn to enter tricks taken.` });
+    }
+  }, [currentPlayerTakingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, players, toast]);
+
 
   const handleEditHistoricScore = useCallback((
     playerId: string,
@@ -263,10 +289,10 @@ export function GameManager() {
     setPlayersScoreData(prevData =>
       prevData.map(playerData => {
         if (playerData.playerId === playerId) {
-          let newTotalScore = playerData.totalScore; // Start with current total
+          let newTotalScore = playerData.totalScore; 
           const updatedScores = playerData.scores.map(scoreEntry => {
             if (scoreEntry.roundNumber === roundNumber) {
-              const oldRoundScore = scoreEntry.roundScore; // Score before edit
+              const oldRoundScore = scoreEntry.roundScore; 
               let newBid = scoreEntry.bid;
               let newTaken = scoreEntry.taken;
 
@@ -274,7 +300,6 @@ export function GameManager() {
               else newTaken = value;
               
               const newCalculatedRoundScore = calculateRoundScore(newBid, newTaken);
-              // Adjust total score by the difference the edit made to this round's score
               newTotalScore = newTotalScore - oldRoundScore + newCalculatedRoundScore;
               return { ...scoreEntry, bid: newBid, taken: newTaken, roundScore: newCalculatedRoundScore };
             }
@@ -293,13 +318,18 @@ export function GameManager() {
     if (currentRoundInputMode === 'BIDDING') {
       toast({ title: "Bidding in Progress", description: "Complete all bids first.", variant: "destructive" }); return;
     }
+    if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null) {
+      toast({ title: "Taking in Progress", description: "Complete all tricks taken entries.", variant: "destructive"}); return;
+    }
+
     const currentRoundDataIsValid = playersScoreData.every(player => {
         const roundEntry = player.scores.find(s => s.roundNumber === currentRoundForInput);
         return roundEntry && roundEntry.bid !== null && roundEntry.taken !== null;
     });
     if (!currentRoundDataIsValid) {
-        toast({ title: "Missing Tricks", description: "Enter tricks taken for all players.", variant: "destructive" }); return;
+        toast({ title: "Missing Scores", description: "Enter tricks taken for all players.", variant: "destructive" }); return;
     }
+
     if (currentRoundForInput < gameRounds.length) {
       const newRoundNumber = currentRoundForInput + 1;
       setCurrentRoundForInput(newRoundNumber);
@@ -310,6 +340,7 @@ export function GameManager() {
       const newDealerIndexInOrder = order.indexOf(newDealerId);
       const newFirstBidderId = order[(newDealerIndexInOrder + 1) % order.length];
       setCurrentPlayerBiddingId(newFirstBidderId); setFirstBidderOfRoundId(newFirstBidderId);
+      setCurrentPlayerTakingId(null); // Reset for the new round
       setCurrentRoundInputMode('BIDDING'); 
       const dealerName = players.find(p => p.id === newDealerId)?.name || 'New Dealer';
       const firstBidderName = players.find(p => p.id === newFirstBidderId)?.name || 'Next';
@@ -318,11 +349,14 @@ export function GameManager() {
       setGamePhase('RESULTS');
       toast({ title: "Game Finished!", description: "All rounds completed." });
     }
-  }, [currentRoundInputMode, currentRoundForInput, gameRounds, playersScoreData, playerOrderForGame, currentDealerId, players, toast]);
+  }, [currentRoundInputMode, currentPlayerTakingId, currentRoundForInput, gameRounds, playersScoreData, playerOrderForGame, currentDealerId, players, toast]);
 
   const handleFinishGame = useCallback(() => {
     if (currentRoundInputMode === 'BIDDING' && gamePhase === 'SCORING') {
          toast({ title: "Complete Round", description: "Complete bidding and tricks first.", variant: "destructive" }); return;
+    }
+    if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && gamePhase === 'SCORING') {
+        toast({ title: "Taking in Progress", description: "Complete all tricks taken entries first.", variant: "destructive"}); return;
     }
     const currentRoundDataIsValid = playersScoreData.every(player => {
         const roundEntry = player.scores.find(s => s.roundNumber === currentRoundForInput);
@@ -333,7 +367,7 @@ export function GameManager() {
     }
     setGamePhase('RESULTS');
     toast({ title: "Game Finished!", description: "Final scores." });
-  }, [currentRoundInputMode, toast, playersScoreData, currentRoundForInput, gameRounds, gamePhase]);
+  }, [currentRoundInputMode, currentPlayerTakingId, toast, playersScoreData, currentRoundForInput, gameRounds, gamePhase]);
 
   if (gamePhase === 'SETUP') {
     return <PlayerSetupForm players={players} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onStartGame={handleStartGame} />;
@@ -361,8 +395,9 @@ export function GameManager() {
         currentRoundInputMode={currentRoundInputMode}
         currentDealerId={currentDealerId}
         currentPlayerBiddingId={currentPlayerBiddingId}
+        currentPlayerTakingId={currentPlayerTakingId}
         onSubmitBid={handleSubmitBid}
-        onUpdateTakenInCurrentRound={handleUpdateTakenInCurrentRound}
+        onSubmitTaken={handleSubmitTaken}
         onEditHistoricScore={handleEditHistoricScore}
         onNextRound={handleNextRound}
         onFinishGame={handleFinishGame}
