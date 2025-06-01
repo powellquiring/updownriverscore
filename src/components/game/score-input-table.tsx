@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode } from '@/lib/types';
-import { ArrowRight, CheckCircle, RefreshCw, UserCheck, ShieldCheck, UserCog, Target } from 'lucide-react';
+import { ArrowRight, CheckCircle, RefreshCw, UserCheck, UserCog, Target } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { NumberInputPad } from './number-input-pad';
 
@@ -92,7 +92,7 @@ export function ScoreInputTable({
     }
     if (gamePhase === 'SCORING') {
       if (currentRoundInputMode === 'BIDDING') {
-        return `Player ${currentPlayerBiddingName || 'Next'} is bidding. Click their bid display to open number pad.`;
+        return `Player ${currentPlayerBiddingName || 'Next'} is bidding. Click a number in their column to submit bid.`;
       }
       return "All bids are in. Enter tricks taken for each player. Scroll down for totals.";
     }
@@ -102,7 +102,7 @@ export function ScoreInputTable({
   const getPlayerColumnSubtitle = (playerId: string) => {
     if (gamePhase !== 'SCORING') return '';
     if (currentRoundInputMode === 'BIDDING') {
-      return playerId === currentPlayerBiddingId ? 'Enter Bid' : 'Waiting...';
+      return playerId === currentPlayerBiddingId ? 'Enter Bid Below' : 'Bid: ...';
     }
     return 'Bid / Taken → Score';
   }
@@ -127,7 +127,7 @@ export function ScoreInputTable({
                   {gamePhase === 'DEALER_SELECTION' ? '' : 'Cards'}
                 </TableHead>
                 {playersForDisplay.map(player => (
-                  <TableHead key={player.playerId} className="min-w-[180px] text-center font-semibold">
+                  <TableHead key={player.playerId} className="min-w-[150px] sm:min-w-[180px] text-center font-semibold">
                     {gamePhase === 'DEALER_SELECTION' && onSelectDealer ? (
                       <Button
                         variant="ghost"
@@ -141,7 +141,7 @@ export function ScoreInputTable({
                       <>
                         {player.name}
                         {currentDealerId === player.playerId && <UserCog className="ml-2 h-4 w-4 inline text-primary-foreground" title="Dealer" />}
-                        {currentPlayerBiddingId === player.playerId && <Target className="ml-2 h-4 w-4 inline text-accent" title="Current Bidder" />}
+                        {currentPlayerBiddingId === player.playerId && currentRoundInputMode === 'BIDDING' && <Target className="ml-2 h-4 w-4 inline text-accent" title="Current Bidder" />}
                       </>
                     )}
                   </TableHead>
@@ -177,25 +177,16 @@ export function ScoreInputTable({
                           const cardsForThisRound = roundInfo.cardsDealt;
 
                           return (
-                            <TableCell key={`${player.playerId}-${roundInfo.roundNumber}`} className="text-center">
+                            <TableCell key={`${player.playerId}-${roundInfo.roundNumber}`} className="text-center align-top pt-2 sm:align-middle sm:pt-4">
                               {isCurrentInputRound && currentRoundInputMode === 'BIDDING' ? (
-                                <div className="flex items-center justify-center">
+                                <div className="flex items-start sm:items-center justify-center min-h-[60px]">
                                   {isCurrentPlayerBiddingThisPlayer ? (
-                                    <Popover>
-                                      <PopoverTrigger asChild>
-                                        <Button variant="outline" className="w-24 h-10">
-                                          {scoreEntry?.bid !== null ? `Bid: ${scoreEntry.bid}` : 'Bid: ...'}
-                                        </Button>
-                                      </PopoverTrigger>
-                                      <PopoverContent className="w-auto p-0" align="center">
-                                        <NumberInputPad
-                                          min={0}
-                                          max={cardsForThisRound}
-                                          onSelectNumber={handleBidSelect}
-                                          currentValue={scoreEntry?.bid}
-                                        />
-                                      </PopoverContent>
-                                    </Popover>
+                                    <NumberInputPad
+                                      min={0}
+                                      max={cardsForThisRound}
+                                      onSelectNumber={handleBidSelect}
+                                      currentValue={scoreEntry?.bid}
+                                    />
                                   ) : (
                                     <span className="w-24 h-10 flex items-center justify-center">
                                       {scoreEntry?.bid !== null ? `Bid: ${scoreEntry.bid}` : 'Bid: ...'}
@@ -212,7 +203,7 @@ export function ScoreInputTable({
                                     <Popover>
                                       <PopoverTrigger asChild>
                                         <Button variant="outline" className="w-24 h-8">
-                                          {scoreEntry?.taken !== null ? `Taken: ${scoreEntry?.taken}` : 'Take: ...'}
+                                          {scoreEntry?.taken !== null ? `Take: ${scoreEntry?.taken}` : 'Take: ...'}
                                         </Button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-auto p-0" align="center">
@@ -284,5 +275,3 @@ export function ScoreInputTable({
     </Card>
   );
 }
-
-    
