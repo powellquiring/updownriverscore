@@ -12,7 +12,8 @@ import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 // Helper function to generate rounds configuration
 const generateGameRounds = (numPlayers: number, maxCardsDealtByUser: number): GameRoundInfo[] => {
   const rounds: GameRoundInfo[] = [];
-  const actualMaxCards = Math.max(1, Math.min(maxCardsDealtByUser, Math.floor(52 / numPlayers)));
+  // Ensure maxCardsDealtByUser is at least 1, and not more than what's possible with 52 cards.
+  const actualMaxCards = Math.max(1, Math.min(maxCardsDealtByUser, numPlayers > 0 ? Math.floor(52 / numPlayers) : maxCardsDealtByUser));
 
   // Rounds starting from actualMaxCards down to 1
   for (let i = actualMaxCards; i >= 1; i--) {
@@ -25,15 +26,20 @@ const generateGameRounds = (numPlayers: number, maxCardsDealtByUser: number): Ga
     }
   }
   
+  // Handle edge case: if only 1 card max, it's already added in the "down" loop.
+  // If somehow rounds is empty but actualMaxCards is 1 (e.g. if the loops were structured differently)
   if (rounds.length === 0 && actualMaxCards === 1) { 
     rounds.push({ roundNumber: 1, cardsDealt: 1, isUpRound: false });
   }
-
   return rounds;
 };
 
 export function GameManager() {
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [players, setPlayers] = useState<Player[]>([
+    { id: uuidv4(), name: 'jul' },
+    { id: uuidv4(), name: 'jen' },
+    { id: uuidv4(), name: 'jak' },
+  ]);
   const [gameRounds, setGameRounds] = useState<GameRoundInfo[]>([]);
   const [playersScoreData, setPlayersScoreData] = useState<PlayerScoreData[]>([]);
   const [currentRoundForInput, setCurrentRoundForInput] = useState<number>(1);
@@ -46,19 +52,26 @@ export function GameManager() {
     if (savedState) {
       try {
         const state = JSON.parse(savedState);
-        if (state.players && Array.isArray(state.players)) setPlayers(state.players);
+        // Only update players if saved state has players, otherwise keep defaults
+        if (state.players && Array.isArray(state.players) && state.players.length > 0) {
+          setPlayers(state.players);
+        }
         
         let loadedGamePhase: GamePhase = 'SETUP';
         if (state.gamePhase && typeof state.gamePhase === 'string') {
             loadedGamePhase = state.gamePhase as GamePhase;
             setGamePhase(loadedGamePhase);
         } else {
-            setGamePhase('SETUP');
+            setGamePhase('SETUP'); // Default to SETUP if no phase saved or invalid
         }
 
+        // Only load gameRounds if not in SETUP phase and rounds exist
         if (loadedGamePhase !== 'SETUP' && state.gameRounds && Array.isArray(state.gameRounds) && state.gameRounds.length > 0 && state.gameRounds[0]?.cardsDealt) {
             setGameRounds(state.gameRounds);
+        } else if (loadedGamePhase === 'SETUP') {
+            setGameRounds([]); // Clear rounds if in setup phase from loaded state
         }
+
 
         if (state.playersScoreData && Array.isArray(state.playersScoreData)) setPlayersScoreData(state.playersScoreData);
         if (state.currentRoundForInput && typeof state.currentRoundForInput === 'number') setCurrentRoundForInput(state.currentRoundForInput);
@@ -69,15 +82,28 @@ export function GameManager() {
         localStorage.removeItem('updownRiverScorerState'); 
         setGamePhase('SETUP'); 
         setFirstDealerPlayerId(null);
+        setPlayers([ // Reset to defaults on error
+            { id: uuidv4(), name: 'jul' },
+            { id: uuidv4(), name: 'jen' },
+            { id: uuidv4(), name: 'jak' },
+        ]);
+        setGameRounds([]);
+        setPlayersScoreData([]);
+        setCurrentRoundForInput(1);
       }
     }
-  }, []);
+  }, []); // Runs once on mount
 
   useEffect(() => {
-    if (gamePhase === 'SETUP' && players.length === 0 && gameRounds.length === 0) {
-        if (localStorage.getItem('updownRiverScorerState') && playersScoreData.length === 0) {
-            return;
-        }
+    // Prevent saving initial default state if it hasn't been interacted with,
+    // especially if there might be a more complete state in localStorage that failed to parse initially
+    // or if we are truly at a fresh start.
+    if (gamePhase === 'SETUP' && 
+        players.length === 3 && players[0].name === 'jul' && // Heuristic for default state
+        gameRounds.length === 0 && 
+        playersScoreData.length === 0 &&
+        !localStorage.getItem('updownRiverScorerState_gameStartedOnce')) { // Avoid saving defaults over a potentially cleared state by user
+      return;
     }
 
     const stateToSave = {
@@ -89,6 +115,10 @@ export function GameManager() {
       firstDealerPlayerId,
     };
     localStorage.setItem('updownRiverScorerState', JSON.stringify(stateToSave));
+    if (gamePhase !== 'SETUP') {
+        localStorage.setItem('updownRiverScorerState_gameStartedOnce', 'true');
+    }
+
   }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId]);
 
 
@@ -102,6 +132,10 @@ export function GameManager() {
   }, []);
 
   const handleStartGame = useCallback((maxCardsDealtByUser: number) => {
+    if (players.length < 2) {
+      toast({ title: "Not enough players", description: "You need at least 2 players to start.", variant: "destructive" });
+      return;
+    }
     const roundsConfig = generateGameRounds(players.length, maxCardsDealtByUser);
     if (roundsConfig.length === 0) {
         toast({ title: "Game Configuration Error", description: "Could not generate rounds. Ensure player count and max cards are valid.", variant: "destructive"});
@@ -123,7 +157,7 @@ export function GameManager() {
     }));
     setPlayersScoreData(initialScores);
     setCurrentRoundForInput(1);
-    setFirstDealerPlayerId(null);
+    setFirstDealerPlayerId(null); // Reset dealer for new game
     setGamePhase('DEALER_SELECTION');
     toast({ title: "Game Ready!", description: `Please select the dealer for the first round.` });
   }, [players, toast]);
@@ -132,7 +166,8 @@ export function GameManager() {
     setFirstDealerPlayerId(playerId);
     setGamePhase('SCORING');
     const dealerName = players.find(p => p.id === playerId)?.name || 'Selected Player';
-    toast({ title: "Dealer Selected", description: `${dealerName} is the dealer. Starting Round 1 with ${gameRounds[0]?.cardsDealt} cards.` });
+    const cardsInFirstRound = gameRounds[0]?.cardsDealt;
+    toast({ title: "Dealer Selected", description: `${dealerName} is the dealer. Starting Round 1 with ${cardsInFirstRound} cards.` });
   }, [players, gameRounds, toast]);
 
   const calculateRoundScore = (bid: number | null, taken: number | null): number => {
@@ -215,13 +250,18 @@ export function GameManager() {
   }, [toast, playersScoreData, currentRoundForInput, gameRounds, gamePhase]);
 
   const handlePlayAgain = useCallback(() => {
-    setPlayers([]); 
+    setPlayers([ // Reset to default players
+        { id: uuidv4(), name: 'jul' },
+        { id: uuidv4(), name: 'jen' },
+        { id: uuidv4(), name: 'jak' },
+    ]); 
     setGameRounds([]);
     setPlayersScoreData([]);
     setCurrentRoundForInput(1);
     setFirstDealerPlayerId(null);
     setGamePhase('SETUP');
     localStorage.removeItem('updownRiverScorerState'); 
+    localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
     toast({ title: "New Game Setup", description: "Configure game and add players to start again." });
   }, [toast]);
 
@@ -231,7 +271,7 @@ export function GameManager() {
 
   if ((gamePhase === 'SCORING' || gamePhase === 'DEALER_SELECTION') && gameRounds.length > 0 && playersScoreData.length > 0) {
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
-    if (!currentRoundInfo && gamePhase === 'SCORING') { // Only critical if scoring, dealer selection doesn't need round info yet.
+    if (!currentRoundInfo && gamePhase === 'SCORING') { 
         console.error("Error: Current round configuration not found during scoring. Resetting to setup.");
         handlePlayAgain(); 
         return <p>Error loading round. Resetting game...</p>;
@@ -248,6 +288,7 @@ export function GameManager() {
         onFinishGame={handleFinishGame}
         onRestartGame={handlePlayAgain}
         onSelectDealer={handleSelectDealer}
+        allPlayers={players}
       />
     );
   }

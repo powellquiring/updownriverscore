@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,8 +19,36 @@ interface PlayerSetupFormProps {
 
 export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartGame }: PlayerSetupFormProps) {
   const [playerName, setPlayerName] = useState('');
-  const [maxCardsInHand, setMaxCardsInHand] = useState('7'); // Default to 7
+  const [maxCardsInHand, setMaxCardsInHand] = useState('2'); // Default to 2
   const { toast } = useToast();
+  const startGameButtonRef = useRef<HTMLButtonElement>(null);
+  const maxCardsInputRef = useRef<HTMLInputElement>(null);
+
+  const isStartGameButtonDisabled = () => {
+    const numMaxCards = parseInt(maxCardsInHand, 10);
+    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 10) {
+        return true;
+    }
+    if (players.length < 2) {
+        return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    const canStart = !isStartGameButtonDisabled();
+    if (canStart && startGameButtonRef.current) {
+      const activeElement = document.activeElement;
+      // Only focus if no input/textarea is currently focused and the button itself isn't focused
+      if (
+        !(activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) &&
+        activeElement !== startGameButtonRef.current
+      ) {
+        // startGameButtonRef.current.focus(); // Auto-focus can be disruptive, user request implies it being ready
+      }
+    }
+  }, [players, maxCardsInHand]);
+
 
   const handleAddPlayerFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +66,8 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
 
   const handleInitiateGame = () => {
     const numMaxCards = parseInt(maxCardsInHand, 10);
-    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 10) { // UI validation
+    // Validation is also in isStartGameButtonDisabled, but good to double check here
+    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 10) {
       toast({ title: "Invalid Max Cards", description: "Max cards per hand must be a number between 1 and 10.", variant: "destructive" });
       return;
     }
@@ -48,16 +77,12 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     }
     onStartGame(numMaxCards);
   };
-
-  const isStartGameDisabled = () => {
-    const numMaxCards = parseInt(maxCardsInHand, 10);
-    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 10) {
-        return true;
+  
+  const handleMaxCardsKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter' && !isStartGameButtonDisabled()) {
+      event.preventDefault();
+      handleInitiateGame();
     }
-    if (players.length < 2) {
-        return true;
-    }
-    return false;
   };
 
   return (
@@ -77,18 +102,20 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
           <div className="space-y-2">
             <Label htmlFor="max-cards" className="text-sm font-medium text-foreground">Max Cards per Hand</Label>
             <Input
+              ref={maxCardsInputRef}
               id="max-cards"
               type="number"
               value={maxCardsInHand}
               onChange={(e) => setMaxCardsInHand(e.target.value)}
+              onKeyDown={handleMaxCardsKeyDown}
               min="1"
-              max="10" // Practical UI limit
+              max="10" 
               placeholder="e.g., 7"
               className="w-full"
               aria-describedby="max-cards-description"
             />
             <p id="max-cards-description" className="text-xs text-muted-foreground">
-              Determines the number of rounds. E.g., 7 means 13 rounds (7 down to 1, then 2 up to 7). The actual max cards may be lower with many players.
+              Determines rounds. E.g., 7 means 13 rounds (7 down to 1, then 2 up to 7). Actual max may be lower with many players.
             </p>
           </div>
         </div>
@@ -107,14 +134,14 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
               aria-label="Player name"
               className="flex-grow"
             />
-            <Button type="submit" aria-label="Add player">
+            <Button type="submit" aria-label="Add player" disabled={players.length >= 6}>
               <PlusCircle className="h-5 w-5 mr-2" /> Add Player
             </Button>
           </form>
 
           {players.length > 0 && (
             <div>
-              <h4 className="text-md font-medium mb-2 text-foreground">Current Players:</h4>
+              <h4 className="text-md font-medium mb-2 text-foreground">Current Players ({players.length}/6):</h4>
               <ul className="space-y-2">
                 {players.map((player) => (
                   <li key={player.id} className="flex items-center justify-between bg-secondary p-3 rounded-md shadow-sm">
@@ -137,8 +164,9 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
       </CardContent>
       <CardFooter>
         <Button
+          ref={startGameButtonRef}
           onClick={handleInitiateGame}
-          disabled={isStartGameDisabled()}
+          disabled={isStartGameButtonDisabled()}
           className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
           size="lg"
         >

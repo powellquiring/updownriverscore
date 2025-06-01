@@ -6,11 +6,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { PlayerScoreData, GameRoundInfo, GamePhase } from '@/lib/types';
+import type { PlayerScoreData, GameRoundInfo, GamePhase, Player } from '@/lib/types';
 import { ArrowRight, CheckCircle, RefreshCw, UserCheck } from 'lucide-react';
 
 interface ScoreInputTableProps {
   playersScoreData: PlayerScoreData[];
+  allPlayers: Player[]; // All configured players
   gameRounds: GameRoundInfo[];
   currentRoundForInput: number;
   gamePhase: GamePhase;
@@ -24,6 +25,7 @@ interface ScoreInputTableProps {
 
 export function ScoreInputTable({
   playersScoreData,
+  allPlayers,
   gameRounds,
   currentRoundForInput,
   gamePhase,
@@ -36,6 +38,8 @@ export function ScoreInputTable({
 }: ScoreInputTableProps) {
   
   const currentRoundConfig = gameRounds.find(r => r.roundNumber === currentRoundForInput);
+  const playersForTable = gamePhase === 'DEALER_SELECTION' ? allPlayers : playersScoreData;
+
 
   const handleScoreChange = (playerId: string, roundNumber: number, field: 'bid' | 'taken', value: string) => {
     const playerScore = playersScoreData.find(p => p.playerId === playerId);
@@ -52,7 +56,8 @@ export function ScoreInputTable({
 
   if (gamePhase === 'SCORING' && !currentRoundConfig) return <p>Loading round configuration...</p>;
 
-  const isLastRound = currentRoundForInput === gameRounds[gameRounds.length - 1]?.roundNumber;
+  const isLastRound = currentRoundConfig && gameRounds.length > 0 && currentRoundForInput === gameRounds[gameRounds.length - 1]?.roundNumber;
+  
   const roundsToDisplay = gameRounds.filter(roundInfo => roundInfo.roundNumber <= currentRoundForInput);
 
   const getHeaderTitle = () => {
@@ -94,13 +99,13 @@ export function ScoreInputTable({
                 <TableHead className="w-[60px] font-semibold">
                   {gamePhase === 'DEALER_SELECTION' ? '' : 'Cards'}
                 </TableHead>
-                {playersScoreData.map(player => (
-                  <TableHead key={player.playerId} className="min-w-[180px] text-center font-semibold">
+                {playersForTable.map(player => (
+                  <TableHead key={player.id || player.playerId} className="min-w-[180px] text-center font-semibold">
                     {gamePhase === 'DEALER_SELECTION' && onSelectDealer ? (
                       <Button 
                         variant="ghost" 
                         className="w-full h-auto p-1 text-base hover:bg-primary/20"
-                        onClick={() => onSelectDealer(player.playerId)}
+                        onClick={() => onSelectDealer(player.id || player.playerId)} // Use player.id for Player, player.playerId for PlayerScoreData
                       >
                         <UserCheck className="mr-2 h-5 w-5 text-accent" /> {player.name}
                       </Button>
@@ -188,17 +193,17 @@ export function ScoreInputTable({
           </Table>
         </div>
         {gamePhase === 'SCORING' && (
-          <div className="mt-8 flex justify-between items-center gap-4">
-            <Button onClick={onRestartGame} variant="outline" size="lg">
+          <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <Button onClick={onRestartGame} variant="outline" size="lg" className="w-full sm:w-auto">
               <RefreshCw className="mr-2 h-5 w-5" /> Restart Game
             </Button>
-            <div className="flex gap-4">
+            <div className="flex gap-4 w-full sm:w-auto">
               {isLastRound ? (
-                <Button onClick={onFinishGame} className="bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
-                  <CheckCircle className="mr-2 h-5 w-5" /> Finish Game & View Results
+                <Button onClick={onFinishGame} className="bg-accent text-accent-foreground hover:bg-accent/90 flex-grow" size="lg">
+                  <CheckCircle className="mr-2 h-5 w-5" /> Finish & View Results
                 </Button>
               ) : (
-                <Button onClick={onNextRound} size="lg">
+                <Button onClick={onNextRound} size="lg" className="flex-grow">
                   Next Round <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               )}
