@@ -82,9 +82,8 @@ export function ScoreInputTable({
     const isCurrentActiveBidCell = roundNumber === currentRoundForInput && inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING';
     const isCurrentActiveTakeCell = roundNumber === currentRoundForInput && inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed;
     
-    if (isCurrentActiveBidCell || isCurrentActiveTakeCell) return; // Don't use popover for direct input cells
+    if (isCurrentActiveBidCell || isCurrentActiveTakeCell) return; 
     
-    // Prevent editing "taken" for current round if bids not confirmed
     if (roundNumber === currentRoundForInput && inputType === 'taken' && !currentRoundBidsConfirmed) return;
 
     setEditingCellDetails({ playerId, roundNumber, inputType, cardsDealt });
@@ -106,7 +105,7 @@ export function ScoreInputTable({
             phaseText = `Bidding: ${currentPlayerActiveName}'s turn`;
         } else if (!currentRoundBidsConfirmed) {
             phaseText = 'All Bids In! Confirm below to proceed.';
-        } else { // Should not happen if logic is correct, but as a fallback
+        } else { 
             phaseText = 'Bidding Phase Complete';
         }
       } else if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
@@ -189,8 +188,6 @@ export function ScoreInputTable({
                 <TableBody>
                   {roundsToDisplay.map((roundInfo) => {
                     const isCurrentDisplayRound = roundInfo.roundNumber === currentRoundForInput;
-                    const isHistoricRound = roundInfo.roundNumber < currentRoundForInput;
-
                     return (
                     <React.Fragment key={roundInfo.roundNumber}>
                       <TableRow className={cn(
@@ -214,7 +211,7 @@ export function ScoreInputTable({
                           return (
                             <TableCell key={cellKey} className="text-center align-top pt-2 sm:align-middle sm:pt-4">
                               {showBidInput ? (
-                                <div className="min-h-[60px]"> {/* Bid Input Pad */}
+                                <div className="min-h-[60px]">
                                   <NumberInputPad 
                                     min={0} max={cardsForThisRound} 
                                     onSelectNumber={(val) => onSubmitBid(player.playerId, val.toString())}
@@ -223,7 +220,7 @@ export function ScoreInputTable({
                                   <div className="text-xs text-muted-foreground mt-1">Taken: -</div>
                                 </div>
                               ) : showTakeInput ? (
-                                <div className="min-h-[60px]"> {/* Take Input Pad */}
+                                <div className="min-h-[60px]"> 
                                   <div className="text-sm mb-1">Bid: {scoreEntry?.bid ?? '-'}</div>
                                   <NumberInputPad 
                                     min={0} max={cardsForThisRound} 
@@ -231,12 +228,12 @@ export function ScoreInputTable({
                                     currentValue={scoreEntry?.taken} 
                                   />
                                 </div>
-                              ) : ( // Displaying historic or non-active scores
-                                <div className="flex flex-col items-center gap-0.5">
+                              ) : ( 
+                                <div className="text-center text-sm py-1">
                                   <Popover open={isEditingThisBid} onOpenChange={(isOpen) => !isOpen && closeEditPopover()}>
                                     <PopoverTrigger asChild>
                                       <span
-                                        className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded-md text-sm"
+                                        className="cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded-md"
                                         onDoubleClick={() => handleOpenEditPopover(player.playerId, roundInfo.roundNumber, 'bid', cardsForThisRound)}
                                       >
                                         Bid: {scoreEntry?.bid ?? '-'}
@@ -253,12 +250,12 @@ export function ScoreInputTable({
                                     </PopoverContent>
                                   </Popover>
                                   
-                                  <span className="text-muted-foreground text-xs">/</span>
+                                  <span className="text-muted-foreground mx-0.5 sm:mx-1">/</span>
                                   
                                   <Popover open={isEditingThisTake} onOpenChange={(isOpen) => !isOpen && closeEditPopover()}>
                                     <PopoverTrigger asChild>
                                       <span
-                                        className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded-md text-sm"
+                                        className="cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded-md"
                                         onDoubleClick={() => handleOpenEditPopover(player.playerId, roundInfo.roundNumber, 'taken', cardsForThisRound)}
                                       >
                                         Taken: {(isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) ? '-' : (scoreEntry?.taken ?? '-')}
@@ -274,14 +271,14 @@ export function ScoreInputTable({
                                       />
                                     </PopoverContent>
                                   </Popover>
-                                  <span className="text-xs text-muted-foreground mt-0.5">→ {scoreEntry?.roundScore ?? 0}</span>
+                                  <span className="text-muted-foreground mx-0.5 sm:mx-1">→</span>
+                                  <span className="font-medium">{scoreEntry?.roundScore ?? 0}</span>
                                 </div>
                               )}
                             </TableCell>
                           );
                         })}
                       </TableRow>
-                      {/* Row for "Confirm Bids" button */}
                       {isCurrentDisplayRound && gamePhase === 'SCORING' && currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
                         <TableRow className="bg-card border-t border-b border-border">
                           <TableCell colSpan={2} className="py-1"></TableCell> 
@@ -343,7 +340,6 @@ export function ScoreInputTable({
                     </Button>
                   )
               ) : (
-                // Fallback or placeholder if no other condition met, or when game setup phase
                  <div className="flex-grow text-center p-2 text-muted-foreground h-11 items-center justify-center flex">
                     Game in progress...
                  </div>
@@ -362,3 +358,4 @@ export function ScoreInputTable({
     </Card>
   );
 }
+
