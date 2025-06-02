@@ -1,5 +1,6 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListChecks, CircleDollarSign, Trophy, Shuffle } from "lucide-react";
+import { ListChecks, CircleDollarSign, Trophy, Shuffle, Gamepad2, Award } from "lucide-react";
 
 export default function RulesPage() {
   return (
@@ -56,7 +57,7 @@ export default function RulesPage() {
 
           <section>
             <h2 className="text-xl font-semibold mb-2 flex items-center gap-2 text-primary-foreground">
-              <Gamepad2 className="h-5 w-5 text-accent" /> {/* Using Gamepad2 as placeholder for Playing */}
+              <Gamepad2 className="h-5 w-5 text-accent" />
               Playing the Hand
             </h2>
             <p>
