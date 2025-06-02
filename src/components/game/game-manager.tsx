@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Player, GameRoundInfo, PlayerScoreData, RoundScoreEntry, GamePhase, CurrentRoundInputMode } from '@/lib/types';
+import type { Player, GameRoundInfo, PlayerScoreData, RoundScoreEntry, GamePhase, CurrentRoundInputMode, CascadingEditTarget } from '@/lib/types';
 import { PlayerSetupForm } from './player-setup-form';
 import { ScoreInputTable } from './score-input-table';
 import { ResultsDisplay } from './results-display';
@@ -58,6 +58,8 @@ export function GameManager() {
   const [firstBidderOfRoundId, setFirstBidderOfRoundId] = useState<string | null>(null);
   const [currentPlayerTakingId, setCurrentPlayerTakingId] = useState<string | null>(null);
   const [currentRoundBidsConfirmed, setCurrentRoundBidsConfirmed] = useState<boolean>(false);
+  const [cascadingEditTarget, setCascadingEditTarget] = useState<CascadingEditTarget | null>(null);
+
 
   const { toast } = useToast();
   
@@ -75,9 +77,9 @@ export function GameManager() {
     setFirstBidderOfRoundId(null);
     setCurrentPlayerTakingId(null);
     setCurrentRoundBidsConfirmed(false);
+    setCascadingEditTarget(null);
     localStorage.removeItem('updownRiverScorerState'); 
     localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
-    // toast({ title: "New Game Setup", description: "Configure game and add players to start again." }); // Removed this line
   }, []);
 
 
@@ -111,6 +113,9 @@ export function GameManager() {
         if (state.firstBidderOfRoundId && typeof state.firstBidderOfRoundId === 'string') setFirstBidderOfRoundId(state.firstBidderOfRoundId);
         if (state.currentPlayerTakingId && typeof state.currentPlayerTakingId === 'string') setCurrentPlayerTakingId(state.currentPlayerTakingId);
         setCurrentRoundBidsConfirmed(state.currentRoundBidsConfirmed === true);
+        // Cascading edit target is transient, not saved/loaded
+        setCascadingEditTarget(null);
+
 
       } catch (error) {
         console.error("Failed to load saved state:", error);
@@ -137,6 +142,7 @@ export function GameManager() {
       players, gameRounds, playersScoreData, currentRoundForInput, gamePhase,
       firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId,
       currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed,
+      // Do not save cascadingEditTarget
     };
     localStorage.setItem('updownRiverScorerState', JSON.stringify(stateToSave));
     if (gamePhase !== 'SETUP') localStorage.setItem('updownRiverScorerState_gameStartedOnce', 'true');
@@ -180,6 +186,7 @@ export function GameManager() {
     setCurrentPlayerBiddingId(null); setFirstBidderOfRoundId(null); setCurrentPlayerTakingId(null);
     setCurrentRoundBidsConfirmed(false);
     setCurrentRoundInputMode('BIDDING');
+    setCascadingEditTarget(null);
     setGamePhase('DEALER_SELECTION');
     toast({ title: "Game Ready!", description: `Please select the dealer for the first round.` });
   }, [players, toast]);
@@ -198,9 +205,11 @@ export function GameManager() {
     }
     const firstBidder = order[(dealerIndex + 1) % order.length];
     setCurrentPlayerBiddingId(firstBidder); setFirstBidderOfRoundId(firstBidder);
-    setCurrentPlayerTakingId(null);
+    setCurrentPlayerTakingId(null); // Will be set when bids are confirmed
     setCurrentRoundBidsConfirmed(false);
-    setCurrentRoundInputMode('BIDDING'); setGamePhase('SCORING');
+    setCurrentRoundInputMode('BIDDING'); 
+    setCascadingEditTarget(null);
+    setGamePhase('SCORING');
     const dealerName = players.find(p => p.id === playerId)?.name || 'Selected';
     const firstBidderName = players.find(p => p.id === firstBidder)?.name || 'Next';
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === 1);
@@ -243,16 +252,21 @@ export function GameManager() {
         prevData.map(pd => pd.playerId === playerId ? {
             ...pd,
             scores: pd.scores.map(s => s.roundNumber === currentRoundForInput ? { ...s, bid: bid, roundScore: calculateRoundScore(bid, s.taken) } : s),
-            totalScore: pd.scores.reduce((sum, entry) => sum + (entry.roundNumber === currentRoundForInput ? calculateRoundScore(bid, entry.taken) : entry.roundScore), 0)
+            totalScore: pd.scores.reduce((sum, entry) => sum + (entry.roundNumber === currentRoundForInput ? calculateRoundScore(bid, entry.taken) : entry.roundScore), 0) // Recalc total based on all rounds
           } : pd
-        )
+        ).map(p => ({ // Ensure total score is accurate after any bid update
+            ...p,
+            totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
+        }))
     );
+
     const order = playerOrderForGame;
     const currentBidderIndex = order.indexOf(playerId);
     const nextBidderId = order[(currentBidderIndex + 1) % order.length];
 
     if (nextBidderId === firstBidderOfRoundId) { 
         setCurrentPlayerBiddingId(null); 
+        setCascadingEditTarget(null);
         toast({ title: "All Bids In!", description: `All bids submitted for Round ${currentRoundForInput}. Click 'Confirm Bids' to proceed.` });
     } else {
         setCurrentPlayerBiddingId(nextBidderId);
@@ -269,6 +283,7 @@ export function GameManager() {
     setCurrentRoundBidsConfirmed(true);
     setCurrentRoundInputMode('TAKING');
     setCurrentPlayerTakingId(firstBidderOfRoundId); 
+    setCascadingEditTarget(null);
     const firstTakerName = players.find(p=> p.id === firstBidderOfRoundId)?.name || 'First Player';
     toast({ title: "Bids Confirmed!", description: `Now enter tricks taken. ${firstTakerName} to start.` });
   }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId, players, toast]);
@@ -319,13 +334,16 @@ export function GameManager() {
             }
             return scoreEntry;
           });
-          const totalScore = updatedScores.reduce((sum, entry) => sum + entry.roundScore, 0);
-          return { ...playerData, scores: updatedScores, totalScore };
+          return { ...playerData, scores: updatedScores }; // Total score will be recalculated below
         }
         return playerData;
-      })
+      }).map(p => ({ // Recalculate total score for all players
+        ...p,
+        totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
+      }))
     );
 
+    setCascadingEditTarget(null); // Clear any cascading from historic edits
 
     if (isLastPlayerToTake) { 
         setCurrentPlayerTakingId(null); 
@@ -372,14 +390,14 @@ export function GameManager() {
     valueStr: string
   ) => {
     const isCurrentRound = roundNumber === currentRoundForInput;
-    if (isCurrentRound) {
-        if (inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING') {
+    if (isCurrentRound) { // Prevent editing current round's active inputs via historic mechanism
+        if (inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) {
              toast({ title: "Cannot Edit Active Bid", description: "Submit bid through normal flow.", variant: "destructive"}); return;
         }
         if (inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
             toast({ title: "Cannot Edit Active Take", description: "Submit tricks taken through normal flow.", variant: "destructive"}); return;
         }
-        if (inputType === 'taken' && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING') {
+        if (inputType === 'taken' && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING') { // If bids not confirmed, can't edit takes for current round
              toast({ title: "Cannot Edit Takes Yet", description: "Confirm bids for the round first.", variant: "destructive"}); return;
         }
     }
@@ -393,16 +411,15 @@ export function GameManager() {
       return;
     }
     
-    // Historic bid edit: "Screw the Dealer" rule
     if (inputType === 'bid' && cardsForRound !== undefined && firstDealerPlayerId && playerOrderForGame.length > 0) {
         const order = playerOrderForGame;
         let historicDealerId = null;
         const firstDealerIndex = order.indexOf(firstDealerPlayerId);
-        if (firstDealerIndex !== -1) {
+        if (firstDealerIndex !== -1) { // Should always find if game started properly
             historicDealerId = order[(firstDealerIndex + roundNumber - 1) % order.length];
         }
 
-        if (playerId === historicDealerId) {
+        if (playerId === historicDealerId) { // Check "Screw the Dealer" for historic bid edit
             const sumOfOtherPlayerBidsHistoric = playersScoreData.reduce((sum, pData) => {
                 if (pData.playerId !== playerId) {
                     const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
@@ -421,30 +438,13 @@ export function GameManager() {
             }
         }
     }
+    // For 'taken' edits, the validation of sum is handled by row highlighting and cascading,
+    // so we don't block the individual edit here based on sum.
 
-    if (inputType === 'taken' && cardsForRound !== undefined) {
-        const sumOfTakesWithNewValue = playersScoreData.reduce((sum, pData) => {
-            const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
-            if (pData.playerId === playerId) { // For the player being edited, use the new value
-                return sum + value;
-            }
-            // For other players, use their existing 'taken' value for that round
-            return sum + (scoreEntry?.taken ?? 0);
-        }, 0);
+    let tempUpdatedPlayersScoreData: PlayerScoreData[] = [];
 
-        if (sumOfTakesWithNewValue !== cardsForRound) {
-            toast({
-                title: "Invalid Historic Taken Edit",
-                description: `For Round ${roundNumber}, total tricks taken must equal ${cardsForRound}. With this change, total would be ${sumOfTakesWithNewValue}. You might need to adjust other players' taken counts first.`,
-                variant: "destructive",
-            });
-            return; 
-        }
-    }
-
-
-    setPlayersScoreData(prevData =>
-      prevData.map(playerData => {
+    setPlayersScoreData(prevData => {
+      tempUpdatedPlayersScoreData = prevData.map(playerData => {
         if (playerData.playerId === playerId) {
           const updatedScores = playerData.scores.map(scoreEntry => {
             if (scoreEntry.roundNumber === roundNumber) {
@@ -459,44 +459,96 @@ export function GameManager() {
             }
             return scoreEntry; 
           });
-          const newTotalScore = updatedScores.reduce((sum, entry) => sum + entry.roundScore, 0);
-          return { ...playerData, scores: updatedScores, totalScore: newTotalScore };
+          // Total score recalculated globally after this map
+          return { ...playerData, scores: updatedScores };
         }
         return playerData;
-      })
-    );
+      }).map(p => ({ // Recalculate total score for all players
+        ...p,
+        totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
+      }));
+      return tempUpdatedPlayersScoreData;
+    });
+    
+    // After state update (or rather, after it's queued, use the temp data for immediate check)
+    if (inputType === 'taken' && cardsForRound !== undefined) {
+      const sumOfTakenInEditedRound = tempUpdatedPlayersScoreData.reduce((acc, pData) => {
+          const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
+          return acc + (scoreEntry?.taken ?? 0);
+      }, 0);
+
+      if (sumOfTakenInEditedRound !== cardsForRound) {
+        const order = playerOrderForGame;
+        if (order.length > 0 && firstDealerPlayerId) {
+            const firstDealerIndex = order.indexOf(firstDealerPlayerId);
+            if (firstDealerIndex !== -1) {
+                const historicDealerIdForRound = order[(firstDealerIndex + roundNumber - 1) % order.length];
+                const historicDealerIndexInOrder = order.indexOf(historicDealerIdForRound);
+                const firstDeclarerForHistoricRound = order[(historicDealerIndexInOrder + 1) % order.length];
+                
+                const declarationOrderForHistoricRound: string[] = [];
+                let editedPlayerIndexInDeclarationOrder = -1;
+                const firstDeclarerIdx = order.indexOf(firstDeclarerForHistoricRound);
+
+                if (firstDeclarerIdx !== -1) {
+                    for (let i = 0; i < order.length; i++) {
+                        const pId = order[(firstDeclarerIdx + i) % order.length];
+                        declarationOrderForHistoricRound.push(pId);
+                        if (pId === playerId) { // The player whose score was just edited
+                            editedPlayerIndexInDeclarationOrder = i;
+                        }
+                    }
+
+                    if (editedPlayerIndexInDeclarationOrder !== -1) {
+                        const nextPlayerIdToEdit = declarationOrderForHistoricRound[(editedPlayerIndexInDeclarationOrder + 1) % order.length];
+                        setCascadingEditTarget({
+                            playerId: nextPlayerIdToEdit,
+                            roundNumber,
+                            inputType: 'taken',
+                            cardsForCell: cardsForRound,
+                        });
+                    } else { setCascadingEditTarget(null); }
+                } else { setCascadingEditTarget(null); }
+            } else { setCascadingEditTarget(null); }
+        } else { setCascadingEditTarget(null); }
+      } else {
+        setCascadingEditTarget(null); // Sum is correct, stop cascading
+      }
+    } else {
+      setCascadingEditTarget(null); // Stop cascade for bid edits
+    }
+
     const playerName = players.find(p => p.id === playerId)?.name || 'Player';
     toast({ title: "Score Corrected", description: `${inputType === 'bid' ? 'Bid' : 'Tricks taken'} for ${playerName} in round ${roundNumber} updated to ${value}.` });
   }, [gameRounds, players, toast, currentRoundForInput, currentPlayerBiddingId, currentPlayerTakingId, currentRoundInputMode, currentRoundBidsConfirmed, playersScoreData, playerOrderForGame, firstDealerPlayerId]);
 
 
   const handleFinishGame = useCallback(() => {
+    // Check if currently in a state where finishing early isn't ideal (e.g., mid-input)
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && gamePhase === 'SCORING') {
-         toast({ title: "Complete Round", description: "Complete bidding first.", variant: "destructive" }); return;
+         toast({ title: "Complete Round Bidding", description: "Complete bidding for the current player first.", variant: "destructive" }); return;
     }
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && gamePhase === 'SCORING') {
       toast({ title: "Confirm Bids", description: "Please confirm bids for the current round first.", variant: "destructive" }); return;
     }
-    if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && gamePhase === 'SCORING') {
-        toast({ title: "Taking in Progress", description: "Complete all tricks taken entries first.", variant: "destructive"}); return;
+    if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
+        toast({ title: "Taking in Progress", description: "Complete tricks taken entries for the current player first.", variant: "destructive"}); return;
     }
     
-    if (gamePhase === 'SCORING' && currentRoundForInput <= gameRounds.length) {
-        const currentRoundDataIsValid = playersScoreData.every(player => {
-            const roundEntry = player.scores.find(s => s.roundNumber === currentRoundForInput);
-            return roundEntry && roundEntry.bid !== null && roundEntry.taken !== null;
-        });
-        if (!currentRoundDataIsValid && currentPlayerTakingId === null && currentRoundBidsConfirmed ) { 
-             toast({ title: "Missing Scores", description: "Complete current round's tricks taken first.", variant: "destructive" }); return;
-        }
-        if (!currentRoundBidsConfirmed && currentPlayerBiddingId === null) { 
-           toast({ title: "Confirm Bids", description: "Please confirm bids for the current round first before finishing.", variant: "destructive" }); return;
-        }
-    }
-
+    // Allow finishing if all inputs for the current step are done, or if game hasn't fully started a round scoring
     setGamePhase('RESULTS');
+    setCascadingEditTarget(null);
     toast({ title: "Game Finished Early!", description: "Displaying current scores." });
-  }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, toast, playersScoreData, currentRoundForInput, gameRounds, gamePhase]);
+  }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, toast, gamePhase]);
+
+  const handleCascadedEditOpened = useCallback(() => {
+    // Clear the target once ScoreInputTable has acknowledged it by opening the popover
+    // This prevents re-triggering if ScoreInputTable re-renders for other reasons.
+    // A small delay might be even safer if there are rapid state changes.
+    // setTimeout(() => setCascadingEditTarget(null), 0);
+    setCascadingEditTarget(null);
+  }, []);
+
 
   if (gamePhase === 'SETUP') {
     return <PlayerSetupForm players={players} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onStartGame={handleStartGame} />;
@@ -510,8 +562,13 @@ export function GameManager() {
     }));
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
     if (!currentRoundInfo && gamePhase === 'SCORING' && gameRounds.length > 0) { 
-        handlePlayAgain(); 
-        return <p>Error loading round data. Resetting game...</p>;
+        // This state indicates a mismatch, possibly from corrupted local storage or an error.
+        // Resetting might be too aggressive. Consider a gentle error message or allowing setup again.
+        // For now, keeping the reset as a fallback.
+        console.error("Error: Could not find current round info. Game state might be corrupted.");
+        // toast({title: "Game Data Error", description: "Resetting to setup. Please start a new game.", variant: "destructive"});
+        handlePlayAgain(); // Trigger a full reset
+        return <p>Error loading round data. Resetting game to setup...</p>; // Show a loading/error message
     }
     return (
       <ScoreInputTable
@@ -527,7 +584,9 @@ export function GameManager() {
         currentPlayerTakingId={currentPlayerTakingId}
         currentRoundBidsConfirmed={currentRoundBidsConfirmed}
         firstBidderOfRoundId={firstBidderOfRoundId}
-        firstDealerPlayerId={firstDealerPlayerId}
+        firstDealerPlayerId={firstDealerPlayerId} // Make sure this is passed
+        cascadingEditTarget={cascadingEditTarget}
+        onCascadedEditOpened={handleCascadedEditOpened}
         onSubmitBid={handleSubmitBid}
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}

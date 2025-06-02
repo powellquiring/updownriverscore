@@ -1,11 +1,11 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption, TableFooter } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode, ScoreInputTableProps } from '@/lib/types';
+import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode, ScoreInputTableProps, CascadingEditTarget } from '@/lib/types';
 import { CheckCircle, RefreshCw, UserCheck, UserCog, Target, Edit3, Flag } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { NumberInputPad } from './number-input-pad';
@@ -26,6 +26,8 @@ export function ScoreInputTable({
   currentRoundBidsConfirmed,
   firstBidderOfRoundId,
   firstDealerPlayerId,
+  cascadingEditTarget,
+  onCascadedEditOpened,
   onSubmitBid,
   onSubmitTaken,
   onConfirmBidsForRound,
@@ -43,6 +45,30 @@ export function ScoreInputTable({
     inputType: 'bid' | 'taken';
     cardsForCell: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (cascadingEditTarget && onCascadedEditOpened) {
+      if (
+        !editingCellDetails ||
+        editingCellDetails.playerId !== cascadingEditTarget.playerId ||
+        editingCellDetails.roundNumber !== cascadingEditTarget.roundNumber ||
+        editingCellDetails.inputType !== cascadingEditTarget.inputType
+      ) {
+        setEditingCellDetails({
+          playerId: cascadingEditTarget.playerId,
+          roundNumber: cascadingEditTarget.roundNumber,
+          inputType: cascadingEditTarget.inputType,
+          cardsForCell: cascadingEditTarget.cardsForCell,
+        });
+      }
+      // Call onCascadedEditOpened to signal consumption, GameManager will clear it
+      // This should ideally be called *after* the popover is visually open or effect has run.
+      // For simplicity, calling it here. If GameManager clears too fast, could cause issues.
+      // A small timeout in GameManager before clearing or a different signal might be more robust.
+      onCascadedEditOpened(); 
+    }
+  }, [cascadingEditTarget, onCascadedEditOpened, editingCellDetails]);
+
 
   const currentDealerName = allPlayers.find(p => p.id === currentDealerId)?.name;
   let currentPlayerActiveName = '';
@@ -86,7 +112,7 @@ export function ScoreInputTable({
             phaseText = 'Bidding Phase Complete';
         }
       } else if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
-        phaseText = currentPlayerTakingId ? `Taking: ${currentPlayerActiveName}'s turn` : 'Round Complete! Advancing...';
+        phaseText = currentPlayerTakingId ? `Taking: ${currentPlayerActiveName}'s turn` : `Processing Round ${currentRoundForInput}...`;
       }
       const dealerInfo = currentDealerName ? `(Dealer: ${currentDealerName})` : '';
       return `Score Sheet - Round ${currentRoundForInput} of ${gameRounds.length} (Cards: ${currentRoundConfig.cardsDealt}) ${dealerInfo} - ${phaseText}`;
@@ -128,12 +154,16 @@ export function ScoreInputTable({
 
     let dealerForRelevantRoundId = null;
 
-    if (isHistoricEditContext) {
-      const firstDealerBaseIndex = order.indexOf(firstDealerPlayerId);
-      if (firstDealerBaseIndex === -1) return undefined;
-      dealerForRelevantRoundId = order[(firstDealerBaseIndex + roundNumForCheck - 1) % numPlayers];
-    } else { // Live input
-      dealerForRelevantRoundId = currentDealerId;
+    // Determine the dealer for the specific round being checked (current or historic)
+    const firstDealerBaseIndex = order.indexOf(firstDealerPlayerId);
+    if (firstDealerBaseIndex === -1) return undefined; // Should not happen if game setup is complete
+    
+    // For live input (not historic), currentDealerId is the authority
+    // For historic, calculate based on firstDealerPlayerId and roundNumber
+    if (!isHistoricEditContext && currentDealerId) {
+        dealerForRelevantRoundId = currentDealerId;
+    } else { // Historic context or if currentDealerId is somehow null during live bidding for dealer
+        dealerForRelevantRoundId = order[(firstDealerBaseIndex + roundNumForCheck - 1) % numPlayers];
     }
     
     if (playerWhosePadIsBeingConfigured !== dealerForRelevantRoundId) {
@@ -164,38 +194,42 @@ export function ScoreInputTable({
     const order = playerOrderForGame;
     const numPlayers = order.length;
 
+    if (isHistoricEditContext) {
+        // For historic edits of "taken", allow any number between 0 and cardsDealt.
+        // The GameManager will handle row highlighting and cascading edits if the sum is off.
+        return (num_on_pad: number) => num_on_pad < 0 || num_on_pad > cardsDealt;
+    }
+
+    // Live input for "taken"
     const firstDealerBaseIndex = order.indexOf(firstDealerPlayerId);
-    if (firstDealerBaseIndex === -1 && (isHistoricEditContext || (currentRoundInputMode === 'TAKING' && currentDealerId))) {
-         // currentDealerId might be null before first dealer selection, but not during TAKING.
-         // firstDealerPlayerId is essential for historic calculations.
+    if (firstDealerBaseIndex === -1 && currentDealerId) { // Should have currentDealerId for live input
         return undefined; 
     }
-
+    
     let dealerForThisRound: string | null = null;
-    let firstDeclarerForThisRoundIndex: number = -1;
+    let firstDeclarerForThisRoundId: string | null = null;
 
-    if (isHistoricEditContext || currentRoundInputMode === 'TAKING') {
-        // Determine dealer and first declarer for THIS specific round (current or historic)
-        const dealerIndexOffset = (firstDealerBaseIndex + roundNumForCheck - 1);
-        const dealerIndexForRound = dealerIndexOffset % numPlayers;
-        dealerForThisRound = order[dealerIndexForRound];
-        firstDeclarerForThisRoundIndex = (dealerIndexForRound + 1) % numPlayers;
-    } else {
-        return undefined; // Should not be called outside these contexts
-    }
-
+    // Determine dealer and first declarer for THIS specific round (current live round)
+    const dealerIndexOffset = (firstDealerBaseIndex + roundNumForCheck - 1);
+    const dealerIndexForRound = dealerIndexOffset % numPlayers;
+    dealerForThisRound = order[dealerIndexForRound];
+    firstDeclarerForThisRoundId = order[(dealerIndexForRound + 1) % numPlayers];
+    
+    if (!firstDeclarerForThisRoundId) return undefined; // Should be set
 
     let sumOfTakesByPriorPlayersInOrder = 0;
     let foundPlayerWhosePad = false;
-    let playerIndexInTakeOrder = -1;
+
+    // Iterate based on the declaration order for *this specific round*
+    const firstDeclarerActualIndex = order.indexOf(firstDeclarerForThisRoundId);
+    if (firstDeclarerActualIndex === -1) return undefined;
 
     for (let i = 0; i < numPlayers; i++) {
-      const currentPlayerInSequenceIndex = (firstDeclarerForThisRoundIndex + i) % numPlayers;
+      const currentPlayerInSequenceIndex = (firstDeclarerActualIndex + i) % numPlayers;
       const currentPlayerInSequenceId = order[currentPlayerInSequenceIndex];
 
       if (currentPlayerInSequenceId === playerWhosePadIsBeingConfigured) {
         foundPlayerWhosePad = true;
-        playerIndexInTakeOrder = i;
         break; 
       }
       const pData = playersScoreData.find(ps => ps.playerId === currentPlayerInSequenceId);
@@ -203,18 +237,16 @@ export function ScoreInputTable({
       sumOfTakesByPriorPlayersInOrder += (scoreEntry?.taken ?? 0);
     }
     
-    if (!foundPlayerWhosePad) return undefined; // Should not happen
+    if (!foundPlayerWhosePad) return undefined;
 
     const tricksAvailableForAllocationFromThisPlayerOnwards = cardsDealt - sumOfTakesByPriorPlayersInOrder;
 
     return (num_on_pad: number) => {
-      if (num_on_pad < 0) return true; // Cannot take negative tricks
+      if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; // Basic boundary
 
-      // If the player whose pad is being configured IS the dealer for that round (last to declare tricks)
-      if (playerWhosePadIsBeingConfigured === dealerForThisRound) {
+      if (playerWhosePadIsBeingConfigured === dealerForThisRound) { // Current player is the dealer for THIS round
         return num_on_pad !== tricksAvailableForAllocationFromThisPlayerOnwards;
       } else {
-        // If not the dealer, they cannot take more than what's available for themselves and subsequent players.
         return num_on_pad > tricksAvailableForAllocationFromThisPlayerOnwards;
       }
     };
@@ -272,12 +304,24 @@ export function ScoreInputTable({
                 <TableBody>
                   {roundsToDisplay.map((roundInfo) => {
                     const isCurrentDisplayRound = roundInfo.roundNumber === currentRoundForInput;
+                    
+                    let sumOfTakenThisRoundForHighlight = 0;
+                    if (!isCurrentDisplayRound || (isCurrentDisplayRound && currentRoundBidsConfirmed)) { // Only calculate sum for past rounds or current round if bids confirmed
+                        playersScoreData.forEach(pData => {
+                            const scoreEntry = pData.scores.find(s => s.roundNumber === roundInfo.roundNumber);
+                            sumOfTakenThisRoundForHighlight += (scoreEntry?.taken ?? 0);
+                        });
+                    }
+                    const isTakenSumIncorrect = !isCurrentDisplayRound && sumOfTakenThisRoundForHighlight !== roundInfo.cardsDealt && playersScoreData.some(p => p.scores.find(s => s.roundNumber === roundInfo.roundNumber)?.taken !== null);
+
+
                     return (
                     <React.Fragment key={roundInfo.roundNumber}>
                       <TableRow className={cn(
                         isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed ? 'bg-primary/10' : '',
                         isCurrentDisplayRound && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed ? 'bg-secondary/10' : '',
-                        !isCurrentDisplayRound ? 'opacity-80 hover:opacity-100' : ''
+                        !isCurrentDisplayRound ? 'opacity-80 hover:opacity-100' : '',
+                        isTakenSumIncorrect ? 'bg-destructive/10' : ''
                       )}>
                         <TableCell className="font-medium">{roundInfo.roundNumber}</TableCell>
                         <TableCell>{roundInfo.cardsDealt}</TableCell>
@@ -363,9 +407,9 @@ export function ScoreInputTable({
                                     <PopoverContent className="w-auto p-0" align="center">
                                       <NumberInputPad
                                         min={0} 
-                                        max={editingCellDetails.cardsForCell}
+                                        max={editingCellDetails.cardsForCell} // Use cardsDealt for the round being edited
                                         currentValue={scoreEntry?.taken}
-                                        isNumberInvalid={isTakenInvalidCallbackForHistoric}
+                                        isNumberInvalid={isTakenInvalidCallbackForHistoric} // This will now be simpler for historic taken
                                         onSelectNumber={(val) => {
                                           onEditHistoricScore(player.playerId, roundInfo.roundNumber, 'taken', val.toString());
                                           closeEditPopover();
@@ -444,7 +488,10 @@ export function ScoreInputTable({
                     currentPlayerActiveName ? `${currentPlayerActiveName} is entering tricks...` : `Waiting for tricks taken...`
                 )}
                 {currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && currentRoundForInput <= gameRounds.length && (
-                    `Processing round ${currentRoundForInput}...`
+                    `Processing Round ${currentRoundForInput}...`
+                )}
+                 {currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && currentRoundForInput > gameRounds.length && (
+                    `Game Finished! View Results.`
                 )}
             </div>
           </div>
@@ -460,3 +507,4 @@ export function ScoreInputTable({
     </Card>
   );
 }
+
