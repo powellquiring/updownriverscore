@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode, ScoreInputTableProps, CascadingEditTarget } from '@/lib/types';
-import { CheckCircle, RefreshCw, UserCheck, UserCog, Target, Edit3, Flag } from 'lucide-react';
+import { CheckCircle, RefreshCw, UserCheck, UserCog, Target, Edit3, Flag, Award } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { NumberInputPad } from './number-input-pad';
 import { cn } from '@/lib/utils';
@@ -46,8 +46,10 @@ export function ScoreInputTable({
     cardsForCell: number;
   } | null>(null);
 
+  const isGameReallyOver = gamePhase === 'RESULTS';
+
   useEffect(() => {
-    if (cascadingEditTarget && onCascadedEditOpened) {
+    if (cascadingEditTarget && onCascadedEditOpened && !isGameReallyOver) {
       if (
         !editingCellDetails ||
         editingCellDetails.playerId !== cascadingEditTarget.playerId ||
@@ -63,7 +65,7 @@ export function ScoreInputTable({
       }
       onCascadedEditOpened(); 
     }
-  }, [cascadingEditTarget, onCascadedEditOpened, editingCellDetails]);
+  }, [cascadingEditTarget, onCascadedEditOpened, editingCellDetails, isGameReallyOver]);
 
 
   const currentDealerName = allPlayers.find(p => p.id === currentDealerId)?.name;
@@ -80,6 +82,8 @@ export function ScoreInputTable({
     inputType: 'bid' | 'taken',
     cardsForCell: number
   ) => {
+    if (isGameReallyOver) return; // Prevent edits if game is over
+
     const isCurrentActiveBidCell = roundNumber === currentRoundForInput && inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING';
     const isCurrentActiveTakeCell = roundNumber === currentRoundForInput && inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed;
     
@@ -98,9 +102,10 @@ export function ScoreInputTable({
 
   if (gamePhase === 'SCORING' && !currentRoundConfig && gameRounds.length > 0 && currentRoundForInput <= gameRounds.length ) return <p>Loading round configuration...</p>;
 
-  const roundsToDisplay = gameRounds.filter(roundInfo => roundInfo.roundNumber <= currentRoundForInput);
+  const roundsToDisplay = gamePhase === 'RESULTS' ? gameRounds : gameRounds.filter(roundInfo => roundInfo.roundNumber <= currentRoundForInput);
 
   const getHeaderTitle = () => {
+    if (isGameReallyOver) return "Game Over - Final Scores";
     if (gamePhase === 'DEALER_SELECTION') return "Select First Dealer";
     if (gamePhase === 'SCORING' && currentRoundConfig) {
       let phaseText = '';
@@ -122,6 +127,7 @@ export function ScoreInputTable({
   }
 
   const getTableCaption = () => {
+    if (isGameReallyOver) return "Game Over! Final scores are displayed. Press 'Restart Game' to play again.";
     if (gamePhase === 'DEALER_SELECTION') return "Click player's name to select as first dealer.";
     if (gamePhase === 'SCORING') {
       if (currentRoundInputMode === 'BIDDING') {
@@ -137,16 +143,16 @@ export function ScoreInputTable({
     return "";
   }
   
-  const isPlayerActiveForBidding = (playerId: string) => currentRoundInputMode === 'BIDDING' && playerId === currentPlayerBiddingId && !currentRoundBidsConfirmed;
-  const isPlayerActiveForTaking = (playerId: string) => currentRoundInputMode === 'TAKING' && playerId === currentPlayerTakingId && currentRoundBidsConfirmed;
+  const isPlayerActiveForBidding = (playerId: string) => !isGameReallyOver && currentRoundInputMode === 'BIDDING' && playerId === currentPlayerBiddingId && !currentRoundBidsConfirmed;
+  const isPlayerActiveForTaking = (playerId: string) => !isGameReallyOver && currentRoundInputMode === 'TAKING' && playerId === currentPlayerTakingId && currentRoundBidsConfirmed;
 
   const getIsBidInvalid = (
     roundConfigForCheck: GameRoundInfo | undefined, 
     playerWhosePadIsBeingConfigured: string,
     isHistoricEditContext: boolean
-  ): ((num_on_pad: number) => boolean) | undefined => {
+  ): ((num_on_pad: number) => boolean) => {
     if (!roundConfigForCheck || !firstDealerPlayerId || playerOrderForGame.length === 0) {
-      return undefined; 
+      return () => false; 
     }
     const cardsDealt = roundConfigForCheck.cardsDealt;
     const roundNumForCheck = roundConfigForCheck.roundNumber;
@@ -155,17 +161,23 @@ export function ScoreInputTable({
 
     let dealerForRelevantRoundId = null;
     const firstDealerBaseIndex = order.indexOf(firstDealerPlayerId);
-    if (firstDealerBaseIndex === -1) return undefined; 
+    if (firstDealerBaseIndex === -1) return () => false; 
     
     dealerForRelevantRoundId = order[(firstDealerBaseIndex + roundNumForCheck - 1) % numPlayers];
     
-    if (playerWhosePadIsBeingConfigured !== dealerForRelevantRoundId) {
-        // For non-dealers (live or historic), only basic boundary check for the pad.
-        // GameManager will handle actual bid rejection if needed for live, cascade for historic.
+    if (playerWhosePadIsBeingConfigured !== dealerForRelevantRoundId && !isHistoricEditContext) { 
+        return (num_on_pad: number) => num_on_pad < 0 || num_on_pad > cardsDealt;
+    }
+    if (playerWhosePadIsBeingConfigured !== dealerForRelevantRoundId && isHistoricEditContext) {
+        // For historic non-dealer edits, only basic boundary, cascade will handle sum issue
         return (num_on_pad: number) => num_on_pad < 0 || num_on_pad > cardsDealt;
     }
 
-    // This player IS the dealer for the round in question
+
+    // This player IS the dealer for the round in question (live or historic)
+    // OR it's a historic edit, and we need to check if this edit by a non-dealer causes a sum problem.
+    // The cascade for historic bids handles the *next* player if a non-dealer causes a sum issue.
+    // The dealer themselves is directly restricted.
     const sumOfOtherPlayerBids = playersScoreData.reduce((sum, pData) => {
         if (pData.playerId !== playerWhosePadIsBeingConfigured) { 
             const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumForCheck);
@@ -175,8 +187,14 @@ export function ScoreInputTable({
     }, 0);
 
     return (num_on_pad: number) => {
-        if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; // Always invalid if outside bounds
-        return sumOfOtherPlayerBids + num_on_pad === cardsDealt; // Dealer's bid cannot make sum equal cards dealt
+        if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; 
+        if (playerWhosePadIsBeingConfigured === dealerForRelevantRoundId) {
+            return sumOfOtherPlayerBids + num_on_pad === cardsDealt; 
+        }
+        // For historic non-dealer: if this edit makes sum === cardsDealt, it's fine for THIS player,
+        // but the cascade will then target the next player (or the dealer with a restriction).
+        // So, for this cell, it's only invalid if out of bounds.
+        return false;
     };
   };
 
@@ -184,9 +202,9 @@ export function ScoreInputTable({
     roundConfigForCheck: GameRoundInfo | undefined, 
     playerWhosePadIsBeingConfigured: string,        
     isHistoricEditContext: boolean
-  ): ((num_on_pad: number) => boolean) | undefined => {
+  ): ((num_on_pad: number) => boolean) => {
     if (!roundConfigForCheck || !firstDealerPlayerId || playerOrderForGame.length === 0) {
-      return undefined; 
+      return () => false; 
     }
     const cardsDealt = roundConfigForCheck.cardsDealt;
     const roundNumForCheck = roundConfigForCheck.roundNumber;
@@ -194,19 +212,18 @@ export function ScoreInputTable({
     const numPlayers = order.length;
 
     const firstDealerBaseIndex = order.indexOf(firstDealerPlayerId);
-    if (firstDealerBaseIndex === -1) return undefined; 
+    if (firstDealerBaseIndex === -1) return () => false; 
     
     const dealerIndexForRound = (firstDealerBaseIndex + roundNumForCheck - 1) % numPlayers;
     const dealerForThisRound = order[dealerIndexForRound];
     const firstDeclarerForThisRoundId = order[(dealerIndexForRound + 1) % numPlayers];
     
-    if (!firstDeclarerForThisRoundId) return undefined; 
+    if (!firstDeclarerForThisRoundId) return () => false; 
 
     let sumOfTakesByPriorPlayersInOrder = 0;
     const firstDeclarerActualIndex = order.indexOf(firstDeclarerForThisRoundId);
-    if (firstDeclarerActualIndex === -1) return undefined;
+    if (firstDeclarerActualIndex === -1) return () => false;
 
-    // Calculate sum of takes by players *before* the current player in the declaration order
     for (let i = 0; i < numPlayers; i++) {
       const currentPlayerInSequenceIndex = (firstDeclarerActualIndex + i) % numPlayers;
       const currentPlayerInSequenceId = order[currentPlayerInSequenceIndex];
@@ -222,23 +239,28 @@ export function ScoreInputTable({
     const tricksAvailableForAllocationFromThisPlayerOnwards = cardsDealt - sumOfTakesByPriorPlayersInOrder;
 
     return (num_on_pad: number) => {
-      if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; // Basic bounds check
+      if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; 
 
       if (isHistoricEditContext) {
-        // For historic edits, we allow temporary imbalance which triggers cascade.
-        // Only the basic bounds (0 to cardsDealt) are enforced directly on the pad.
-        return false; 
+        return false; // For historic edits, allow temporary imbalance which triggers cascade. Only basic bounds.
       }
 
       // Live input validation:
       if (playerWhosePadIsBeingConfigured === dealerForThisRound) { 
-        // Dealer (last to declare 'taken') MUST take exactly what's remaining
         return num_on_pad !== tricksAvailableForAllocationFromThisPlayerOnwards;
       } else {
-        // Non-dealers cannot take more than what's available for themselves and subsequent players
         return num_on_pad > tricksAvailableForAllocationFromThisPlayerOnwards;
       }
     };
+  };
+  
+  const sortedPlayersForResults = isGameReallyOver 
+    ? [...playersScoreData].sort((a, b) => b.totalScore - a.totalScore)
+    : playersScoreData;
+
+  const getPlayerRank = (playerId: string): number => {
+    if (!isGameReallyOver) return -1;
+    return sortedPlayersForResults.findIndex(p => p.playerId === playerId);
   };
 
 
@@ -266,32 +288,32 @@ export function ScoreInputTable({
                     ) : (
                       <>
                         {player.name}
-                        {currentDealerId === player.playerId && gamePhase === 'SCORING' && <UserCog className="ml-1 h-3 w-3 sm:h-4 sm:w-4 inline text-primary-foreground" title="Dealer" />}
-                        {(isPlayerActiveForBidding(player.playerId) || isPlayerActiveForTaking(player.playerId)) && <Target className="ml-1 h-3 w-3 sm:h-4 sm:w-4 inline text-accent" title="Current Turn" />}
+                        {!isGameReallyOver && currentDealerId === player.playerId && gamePhase === 'SCORING' && <UserCog className="ml-1 h-3 w-3 sm:h-4 sm:w-4 inline text-primary-foreground" title="Dealer" />}
+                        {!isGameReallyOver && (isPlayerActiveForBidding(player.playerId) || isPlayerActiveForTaking(player.playerId)) && <Target className="ml-1 h-3 w-3 sm:h-4 sm:w-4 inline text-accent" title="Current Turn" />}
                       </>
                     )}
                   </TableHead>
                 ))}
               </TableRow>
-               {gamePhase === 'SCORING' && playersScoreData.length > 0 && (
-                <TableRow>
-                  <TableHead></TableHead> {/* Spacer for Round column */}
-                  <TableHead></TableHead> {/* Spacer for Cards column */}
+               {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && playersScoreData.length > 0 && (
+                <TableRow className="border-b-0">
+                  <TableHead className="py-1"></TableHead> {}
+                  <TableHead className="py-1"></TableHead> {}
                   <TableHead 
                     colSpan={playersScoreData.length} 
                     className="text-center text-xs text-muted-foreground py-1 px-0"
                   >
                     Bid / Taken → Score 
-                    <Edit3 className="h-3 w-3 inline ml-1 opacity-50" title="Double-click past scores to edit"/>
+                    {!isGameReallyOver && <Edit3 className="h-3 w-3 inline ml-1 opacity-50" title="Double-click past scores to edit"/>}
                   </TableHead>
                 </TableRow>
               )}
             </TableHeader>
-            {gamePhase === 'SCORING' && currentRoundConfig && (
+            {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (currentRoundConfig || isGameReallyOver) && (
               <>
                 <TableBody>
                   {roundsToDisplay.map((roundInfo) => {
-                    const isCurrentDisplayRound = roundInfo.roundNumber === currentRoundForInput;
+                    const isCurrentDisplayRound = !isGameReallyOver && roundInfo.roundNumber === currentRoundForInput;
                     
                     let sumOfTakenThisRoundForHighlight = 0;
                     let allTakesEnteredForHighlight = playersScoreData.every(pData => pData.scores.find(s => s.roundNumber === roundInfo.roundNumber)?.taken !== null);
@@ -319,7 +341,7 @@ export function ScoreInputTable({
                       <TableRow className={cn(
                         isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed ? 'bg-primary/10' : '',
                         isCurrentDisplayRound && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed ? 'bg-secondary/10' : '',
-                        !isCurrentDisplayRound ? 'opacity-80 hover:opacity-100' : '',
+                        !isCurrentDisplayRound && !isGameReallyOver ? 'opacity-80 hover:opacity-100' : '',
                         (isProblematicBidSum || isProblematicTakenSum) ? 'bg-destructive/10' : ''
                       )}>
                         <TableCell className="font-medium">{roundInfo.roundNumber}</TableCell>
@@ -328,9 +350,9 @@ export function ScoreInputTable({
                           const scoreEntry = player.scores.find(s => s.roundNumber === roundInfo.roundNumber);
                           const cellKey = `${player.playerId}-${roundInfo.roundNumber}`;
                           
-                          const isActiveForBidding = isCurrentDisplayRound && isPlayerActiveForBidding(player.playerId);
-                          const isActiveForTaking = isCurrentDisplayRound && isPlayerActiveForTaking(player.playerId);
-                          const showLiveInputPopover = isActiveForBidding || isActiveForTaking;
+                          const isActiveForBiddingLive = isCurrentDisplayRound && isPlayerActiveForBidding(player.playerId);
+                          const isActiveForTakingLive = isCurrentDisplayRound && isPlayerActiveForTaking(player.playerId);
+                          const showLiveInputPopover = isActiveForBiddingLive || isActiveForTakingLive;
 
                           const isEditingThisCellForHistoric = editingCellDetails?.playerId === player.playerId && editingCellDetails.roundNumber === roundInfo.roundNumber;
                           const isEditingHistoricBid = isEditingThisCellForHistoric && editingCellDetails.inputType === 'bid';
@@ -345,22 +367,18 @@ export function ScoreInputTable({
                                 <Popover 
                                   open={showLiveInputPopover} 
                                   onOpenChange={(isOpen) => {
-                                    // Prevent user from closing popover if it's their turn; GameManager state controls this
-                                    if (!isOpen && showLiveInputPopover) {
-                                      // Could add a toast or console log if strict control is needed,
-                                      // but generally state changes from GameManager will correctly manage open state.
-                                    }
+                                    if (!isOpen && showLiveInputPopover) { /* Managed by GameManager state */ }
                                   }}
                                 >
                                   <PopoverTrigger asChild>
                                     <div className="cursor-pointer py-2 flex flex-col items-center justify-center min-h-[50px] relative">
-                                      {isActiveForBidding && (
+                                      {isActiveForBiddingLive && (
                                         <>
                                           <span className="text-xs sm:text-sm">Bid: {scoreEntry?.bid ?? '-'}</span>
                                           <span className="text-xs text-muted-foreground">Taken: -</span>
                                         </>
                                       )}
-                                      {isActiveForTaking && (
+                                      {isActiveForTakingLive && (
                                         <>
                                           <span className="text-xs sm:text-sm">Bid: {scoreEntry?.bid ?? '-'}</span>
                                           <span className="text-xs sm:text-sm">Taken: {scoreEntry?.taken ?? '-'}</span>
@@ -373,21 +391,21 @@ export function ScoreInputTable({
                                     <NumberInputPad 
                                       min={0} max={roundInfo.cardsDealt} 
                                       onSelectNumber={(val) => {
-                                        if (isActiveForBidding) onSubmitBid(player.playerId, val.toString());
-                                        else if (isActiveForTaking) onSubmitTaken(player.playerId, val.toString());
+                                        if (isActiveForBiddingLive) onSubmitBid(player.playerId, val.toString());
+                                        else if (isActiveForTakingLive) onSubmitTaken(player.playerId, val.toString());
                                       }}
-                                      currentValue={isActiveForBidding ? scoreEntry?.bid : scoreEntry?.taken}
-                                      isNumberInvalid={isActiveForBidding ? isBidInvalidCallback : isTakenInvalidCallback}
+                                      currentValue={isActiveForBiddingLive ? scoreEntry?.bid : scoreEntry?.taken}
+                                      isNumberInvalid={isActiveForBiddingLive ? isBidInvalidCallback : isTakenInvalidCallback}
                                     />
                                   </PopoverContent>
                                 </Popover>
                               ) : ( 
                                 <div className="text-center text-xs sm:text-sm py-1">
-                                  <Popover open={isEditingHistoricBid} onOpenChange={(isOpen) => { if (!isOpen) closeEditPopover(); }}>
-                                    <PopoverTrigger asChild>
+                                  <Popover open={!isGameReallyOver && isEditingHistoricBid} onOpenChange={(isOpen) => { if (!isOpen) closeEditPopover(); }}>
+                                    <PopoverTrigger asChild disabled={isGameReallyOver}>
                                       <span
-                                        className="cursor-pointer hover:bg-muted/50 px-0.5 sm:px-1 py-0.5 rounded-sm"
-                                        onDoubleClick={() => handleOpenEditPopover(player.playerId, roundInfo.roundNumber, 'bid', roundInfo.cardsDealt)}
+                                        className={cn("cursor-pointer hover:bg-muted/50 px-0.5 sm:px-1 py-0.5 rounded-sm", isGameReallyOver && "cursor-default hover:bg-transparent")}
+                                        onDoubleClick={!isGameReallyOver ? () => handleOpenEditPopover(player.playerId, roundInfo.roundNumber, 'bid', roundInfo.cardsDealt) : undefined}
                                       >
                                         {scoreEntry?.bid ?? '-'}
                                       </span>
@@ -410,15 +428,15 @@ export function ScoreInputTable({
                                   
                                   <span className="text-muted-foreground mx-0.5">/</span>
                                   
-                                  <Popover open={isEditingHistoricTake} onOpenChange={(isOpen) => { if (!isOpen) closeEditPopover(); }}>
-                                    <PopoverTrigger asChild>
+                                  <Popover open={!isGameReallyOver && isEditingHistoricTake} onOpenChange={(isOpen) => { if (!isOpen) closeEditPopover(); }}>
+                                    <PopoverTrigger asChild disabled={isGameReallyOver}>
                                       <span
-                                        className="cursor-pointer hover:bg-muted/50 px-0.5 sm:px-1 py-0.5 rounded-sm"
-                                        onDoubleClick={() => {
+                                        className={cn("cursor-pointer hover:bg-muted/50 px-0.5 sm:px-1 py-0.5 rounded-sm", isGameReallyOver && "cursor-default hover:bg-transparent")}
+                                        onDoubleClick={!isGameReallyOver ? () => {
                                            if (!(isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed)) {
                                               handleOpenEditPopover(player.playerId, roundInfo.roundNumber, 'taken', roundInfo.cardsDealt)
                                             }
-                                        }}
+                                        } : undefined}
                                       >
                                         {(isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) ? '-' : (scoreEntry?.taken ?? '-')}
                                       </span>
@@ -446,7 +464,7 @@ export function ScoreInputTable({
                           );
                         })}
                       </TableRow>
-                      {isCurrentDisplayRound && gamePhase === 'SCORING' && currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
+                      {!isGameReallyOver && isCurrentDisplayRound && gamePhase === 'SCORING' && currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
                         <TableRow className="bg-card border-t border-b border-border">
                           <TableCell colSpan={2 + playersScoreData.length} className="text-center py-2 px-1">
                             <Button
@@ -466,54 +484,68 @@ export function ScoreInputTable({
                 <TableFooter>
                   <TableRow className="bg-card border-t-2 border-primary">
                     <TableCell colSpan={2} className="font-bold text-lg text-right">Total</TableCell>
-                    {playersScoreData.map(player => (
-                      <TableCell key={`total-${player.playerId}`} className="text-center font-bold text-lg text-primary-foreground">
-                        {player.totalScore}
-                      </TableCell>
-                    ))}
+                    {playersScoreData.map(player => {
+                      const rank = getPlayerRank(player.playerId);
+                      let rankStyle = "text-primary-foreground";
+                      let awardIcon = null;
+                      if (isGameReallyOver) {
+                          if (rank === 0) { rankStyle = "text-yellow-500 font-bold border-2 border-yellow-400 bg-yellow-500/10 rounded-md"; awardIcon = <Award className="inline-block h-5 w-5 ml-1 text-yellow-500" />; }
+                          else if (rank === 1) { rankStyle = "text-slate-400 font-semibold"; }
+                          else if (rank === 2) { rankStyle = "text-orange-400 font-semibold"; }
+                      }
+                      return (
+                        <TableCell key={`total-${player.playerId}`} className={cn("text-center font-bold text-lg p-2", rankStyle)}>
+                          {player.totalScore} {awardIcon}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 </TableFooter>
               </>
             )}
           </Table>
         </div>
-        {gamePhase === 'SCORING' && (
+        {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (
           <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
             <Button onClick={onRestartGame} variant="outline" size="lg" className="w-full sm:w-auto">
-              <RefreshCw className="mr-2 h-5 w-5" /> Restart Game
+              <RefreshCw className="mr-2 h-5 w-5" /> {isGameReallyOver ? "Play New Game" : "Restart Game"}
             </Button>
             
-            <Button 
-                onClick={onFinishGame} 
-                variant="destructive" 
-                size="lg" 
-                className="w-full sm:w-auto"
-                disabled={
-                  (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && !currentRoundBidsConfirmed) || // Bidding in progress
-                  (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) || // Bids entered but not confirmed
-                  (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed) // Taking in progress
-                }
-            >
-                <Flag className="mr-2 h-5 w-5" /> Finish Game Early
-            </Button>
+            {!isGameReallyOver && gamePhase === 'SCORING' && (
+              <Button 
+                  onClick={onFinishGame} 
+                  variant="destructive" 
+                  size="lg" 
+                  className="w-full sm:w-auto"
+                  disabled={
+                    (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && !currentRoundBidsConfirmed) || 
+                    (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) || 
+                    (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed) 
+                  }
+              >
+                  <Flag className="mr-2 h-5 w-5" /> Finish Game Early
+              </Button>
+            )}
             
-            <div className="flex-grow text-center p-2 text-muted-foreground h-11 items-center justify-center flex text-sm">
-                {currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && !currentRoundBidsConfirmed && (
-                    currentPlayerActiveName ? `${currentPlayerActiveName} is bidding...` : `Waiting for bids...`
-                )}
-                {currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
-                    `Confirm bids in the table above to proceed...`
-                )}
-                {currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && (
-                    currentPlayerActiveName ? `${currentPlayerActiveName} is entering tricks...` : `Waiting for tricks taken...`
-                )}
-                {currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && currentRoundForInput <= gameRounds.length && (
-                    `All tricks taken for Round ${currentRoundForInput}. Processing...`
-                )}
-                 {currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && currentRoundForInput > gameRounds.length && (
-                    `Game Finished! View Results.`
-                )}
-            </div>
+            {!isGameReallyOver && (
+              <div className="flex-grow text-center p-2 text-muted-foreground h-11 items-center justify-center flex text-sm">
+                  {currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && !currentRoundBidsConfirmed && (
+                      currentPlayerActiveName ? `${currentPlayerActiveName} is bidding...` : `Waiting for bids...`
+                  )}
+                  {currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
+                      `Confirm bids in the table above to proceed...`
+                  )}
+                  {currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && (
+                      currentPlayerActiveName ? `${currentPlayerActiveName} is entering tricks...` : `Waiting for tricks taken...`
+                  )}
+                  {currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && currentRoundForInput <= gameRounds.length && (
+                      `All tricks taken for Round ${currentRoundForInput}. Processing...`
+                  )}
+                  {currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && currentRoundForInput > gameRounds.length && (
+                      `Game Finished! View Results.`
+                  )}
+              </div>
+            )}
           </div>
         )}
         {gamePhase === 'DEALER_SELECTION' && (
@@ -527,3 +559,4 @@ export function ScoreInputTable({
     </Card>
   );
 }
+

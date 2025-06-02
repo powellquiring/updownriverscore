@@ -5,7 +5,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { Player, GameRoundInfo, PlayerScoreData, RoundScoreEntry, GamePhase, CurrentRoundInputMode, CascadingEditTarget } from '@/lib/types';
 import { PlayerSetupForm } from './player-setup-form';
 import { ScoreInputTable } from './score-input-table';
-import { ResultsDisplay } from './results-display';
+// import { ResultsDisplay } from './results-display'; // No longer needed
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
@@ -113,7 +113,6 @@ export function GameManager() {
         if (state.firstBidderOfRoundId && typeof state.firstBidderOfRoundId === 'string') setFirstBidderOfRoundId(state.firstBidderOfRoundId);
         if (state.currentPlayerTakingId && typeof state.currentPlayerTakingId === 'string') setCurrentPlayerTakingId(state.currentPlayerTakingId);
         setCurrentRoundBidsConfirmed(state.currentRoundBidsConfirmed === true);
-        // Cascading edit target is transient, not saved/loaded
         setCascadingEditTarget(null);
 
 
@@ -142,7 +141,6 @@ export function GameManager() {
       players, gameRounds, playersScoreData, currentRoundForInput, gamePhase,
       firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId,
       currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed,
-      // Do not save cascadingEditTarget
     };
     localStorage.setItem('updownRiverScorerState', JSON.stringify(stateToSave));
     if (gamePhase !== 'SETUP') localStorage.setItem('updownRiverScorerState_gameStartedOnce', 'true');
@@ -205,7 +203,7 @@ export function GameManager() {
     }
     const firstBidder = order[(dealerIndex + 1) % order.length];
     setCurrentPlayerBiddingId(firstBidder); setFirstBidderOfRoundId(firstBidder);
-    setCurrentPlayerTakingId(null); // Will be set when bids are confirmed
+    setCurrentPlayerTakingId(null); 
     setCurrentRoundBidsConfirmed(false);
     setCurrentRoundInputMode('BIDDING'); 
     setCascadingEditTarget(null);
@@ -252,9 +250,8 @@ export function GameManager() {
         prevData.map(pd => pd.playerId === playerId ? {
             ...pd,
             scores: pd.scores.map(s => s.roundNumber === currentRoundForInput ? { ...s, bid: bid, roundScore: calculateRoundScore(bid, s.taken) } : s),
-            totalScore: pd.scores.reduce((sum, entry) => sum + (entry.roundNumber === currentRoundForInput ? calculateRoundScore(bid, entry.taken) : entry.roundScore), 0) // Recalc total based on all rounds
           } : pd
-        ).map(p => ({ // Ensure total score is accurate after any bid update
+        ).map(p => ({ 
             ...p,
             totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
         }))
@@ -334,16 +331,16 @@ export function GameManager() {
             }
             return scoreEntry;
           });
-          return { ...playerData, scores: updatedScores }; // Total score will be recalculated below
+          return { ...playerData, scores: updatedScores }; 
         }
         return playerData;
-      }).map(p => ({ // Recalculate total score for all players
+      }).map(p => ({ 
         ...p,
         totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
       }))
     );
 
-    setCascadingEditTarget(null); // Clear any cascading from historic edits
+    setCascadingEditTarget(null); 
 
     if (isLastPlayerToTake) { 
         setCurrentPlayerTakingId(null); 
@@ -370,7 +367,12 @@ export function GameManager() {
             toast({ title: `Starting Round ${newRoundNumber}`, description: `${dealerName} is dealer. Dealing ${cardsForNewRound} cards. ${firstBidderName} to bid.`});
         } else { 
             setGamePhase('RESULTS');
-            toast({ title: "Game Finished!", description: "All rounds completed. Viewing results." });
+            setCurrentPlayerBiddingId(null);
+            setCurrentPlayerTakingId(null);
+            setCurrentRoundInputMode('BIDDING');
+            setCurrentRoundBidsConfirmed(false);
+            setCascadingEditTarget(null);
+            toast({ title: "Game Finished!", description: "All rounds completed. Final scores are displayed below." });
         }
 
     } else {
@@ -390,14 +392,14 @@ export function GameManager() {
     valueStr: string
   ) => {
     const isCurrentRound = roundNumber === currentRoundForInput;
-    if (isCurrentRound) { // Prevent editing current round's active inputs via historic mechanism
+    if (isCurrentRound) {
         if (inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) {
              toast({ title: "Cannot Edit Active Bid", description: "Submit bid through normal flow.", variant: "destructive"}); return;
         }
         if (inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
             toast({ title: "Cannot Edit Active Take", description: "Submit tricks taken through normal flow.", variant: "destructive"}); return;
         }
-        if (inputType === 'taken' && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING') { // If bids not confirmed, can't edit takes for current round
+        if (inputType === 'taken' && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING') { 
              toast({ title: "Cannot Edit Takes Yet", description: "Confirm bids for the round first.", variant: "destructive"}); return;
         }
     }
@@ -411,10 +413,6 @@ export function GameManager() {
       return;
     }
     
-    // For historic bid edits, the NumberInputPad will handle visual disabling of the dealer's forbidden bid.
-    // Here, we don't reject it if a non-dealer causes the sum issue; instead, we trigger cascade.
-    // For historic 'taken' edits, direct validation here is also minimal, relying on cascade.
-
     let tempUpdatedPlayersScoreData: PlayerScoreData[] = [];
 
     setPlayersScoreData(prevData => {
@@ -455,9 +453,15 @@ export function GameManager() {
         const historicDealerIdForRound = order[(firstDealerIndex + roundNumber - 1) % order.length];
         const historicDealerIndexInOrder = order.indexOf(historicDealerIdForRound);
         
-        // Determine the bidding/declaration order for the historic round
-        const firstDeclarerForHistoricRound = order[(historicDealerIndexInOrder + 1) % order.length];
-        const declarationOrderForHistoricRound: string[] = [];
+        let firstDeclarerForHistoricRound = '';
+        let declarationOrderForHistoricRound: string[] = [];
+
+        if (inputType === 'bid') {
+            firstDeclarerForHistoricRound = order[(historicDealerIndexInOrder + 1) % order.length]; // Bidding starts left of dealer
+        } else { // 'taken'
+            firstDeclarerForHistoricRound = order[(historicDealerIndexInOrder + 1) % order.length]; // Taking also starts left of dealer (same as first bidder)
+        }
+        
         const firstDeclarerIdx = order.indexOf(firstDeclarerForHistoricRound);
 
         if (firstDeclarerIdx !== -1) {
@@ -465,7 +469,7 @@ export function GameManager() {
                 declarationOrderForHistoricRound.push(order[(firstDeclarerIdx + i) % order.length]);
             }
         } else {
-            setCascadingEditTarget(null); // Should not happen
+            setCascadingEditTarget(null); 
             return;
         }
         
@@ -475,7 +479,6 @@ export function GameManager() {
         if (editedPlayerIndexInDeclarationOrder !== -1) {
             nextPlayerIdToEdit = declarationOrderForHistoricRound[(editedPlayerIndexInDeclarationOrder + 1) % order.length];
         }
-
 
         if (inputType === 'taken') {
             const sumOfTakenInEditedRound = tempUpdatedPlayersScoreData.reduce((acc, pData) => {
@@ -502,7 +505,7 @@ export function GameManager() {
             }, 0);
 
             if (sumOfBidsInEditedRound === cardsForRound) {
-                if (nextPlayerIdToEdit) {
+                 if (nextPlayerIdToEdit) {
                      setCascadingEditTarget({
                         playerId: nextPlayerIdToEdit,
                         roundNumber,
@@ -514,17 +517,16 @@ export function GameManager() {
                 setCascadingEditTarget(null);
             }
         }
-
     } else {
       setCascadingEditTarget(null); 
     }
 
     const playerName = players.find(p => p.id === playerId)?.name || 'Player';
     toast({ title: "Score Corrected", description: `${inputType === 'bid' ? 'Bid' : 'Tricks taken'} for ${playerName} in round ${roundNumber} updated to ${value}.` });
-  }, [gameRounds, players, toast, currentRoundForInput, currentPlayerBiddingId, currentPlayerTakingId, currentRoundInputMode, currentRoundBidsConfirmed, playersScoreData, playerOrderForGame, firstDealerPlayerId]);
+  }, [gameRounds, players, toast, currentRoundForInput, currentPlayerBiddingId, currentPlayerTakingId, currentRoundInputMode, currentRoundBidsConfirmed, playerOrderForGame, firstDealerPlayerId]);
 
 
-  const handleFinishGame = useCallback(() => {
+  const handleFinishGameEarly = useCallback(() => {
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && gamePhase === 'SCORING') {
          toast({ title: "Complete Round Bidding", description: "Complete bidding for the current player first.", variant: "destructive" }); return;
     }
@@ -536,6 +538,10 @@ export function GameManager() {
     }
     
     setGamePhase('RESULTS');
+    setCurrentPlayerBiddingId(null);
+    setCurrentPlayerTakingId(null);
+    setCurrentRoundInputMode('BIDDING');
+    setCurrentRoundBidsConfirmed(false);
     setCascadingEditTarget(null);
     toast({ title: "Game Finished Early!", description: "Displaying current scores." });
   }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, toast, gamePhase]);
@@ -549,25 +555,32 @@ export function GameManager() {
     return <PlayerSetupForm players={players} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onStartGame={handleStartGame} />;
   }
 
-  if ((gamePhase === 'SCORING' || gamePhase === 'DEALER_SELECTION') && (gameRounds.length > 0 || gamePhase === 'DEALER_SELECTION' )) {
+  // Render ScoreInputTable for DEALER_SELECTION, SCORING, and RESULTS phases
+  if ((gamePhase === 'DEALER_SELECTION' || gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (gameRounds.length > 0 || gamePhase === 'DEALER_SELECTION' || (gamePhase === 'RESULTS' && playersScoreData.length > 0) )) {
     const activePlayersScoreData = playersScoreData.length > 0 ? playersScoreData : players.map(p => ({
         playerId: p.id, name: p.name, 
         scores: gameRounds.map(r => ({ roundNumber: r.roundNumber, bid: null, taken: null, roundScore: 0})), 
         totalScore: 0
     }));
-    const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
+
+    let currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
+    if (gamePhase === 'RESULTS' && gameRounds.length > 0) { // For results, show all rounds, currentRoundForInput might be beyond last round
+        currentRoundInfo = gameRounds[gameRounds.length - 1]; 
+    }
+    
     if (!currentRoundInfo && gamePhase === 'SCORING' && gameRounds.length > 0) { 
         console.error("Error: Could not find current round info. Game state might be corrupted.");
         handlePlayAgain(); 
         return <p>Error loading round data. Resetting game to setup...</p>; 
     }
+
     return (
       <ScoreInputTable
         playersScoreData={activePlayersScoreData}
         allPlayers={players} 
         playerOrderForGame={playerOrderForGame}
         gameRounds={gameRounds}
-        currentRoundForInput={currentRoundForInput}
+        currentRoundForInput={currentRoundForInput} // currentRoundForInput can be > gameRounds.length in RESULTS
         gamePhase={gamePhase}
         currentRoundInputMode={currentRoundInputMode}
         currentDealerId={currentDealerId}
@@ -582,15 +595,11 @@ export function GameManager() {
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}
         onEditHistoricScore={handleEditHistoricScore}
-        onFinishGame={handleFinishGame}
+        onFinishGame={handleFinishGameEarly} // Renamed for clarity
         onRestartGame={handlePlayAgain}
         onSelectDealer={handleSelectDealer}
       />
     );
-  }
-
-  if (gamePhase === 'RESULTS') {
-    return <ResultsDisplay playersScoreData={playersScoreData} onPlayAgain={handlePlayAgain} />;
   }
 
   return (

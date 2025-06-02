@@ -1,3 +1,8 @@
+
+// This file is no longer needed and can be deleted.
+// The results are now displayed directly in ScoreInputTable.
+// Keeping an empty file or a comment to signify its removal by the AI.
+/*
 "use client";
 
 import React from 'react';
@@ -54,3 +59,4 @@ export function ResultsDisplay({ playersScoreData, onPlayAgain }: ResultsDisplay
     </Card>
   );
 }
+*/
