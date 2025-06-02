@@ -24,6 +24,7 @@ interface ScoreInputTableProps {
   currentPlayerTakingId: string | null; 
   currentRoundBidsConfirmed: boolean;
   firstBidderOfRoundId: string | null; 
+  firstDealerPlayerId: string | null; // Added prop
   onSubmitBid: (playerId: string, bid: string) => void;
   onSubmitTaken: (playerId: string, taken: string) => void;
   onConfirmBidsForRound: () => void;
@@ -46,6 +47,7 @@ export function ScoreInputTable({
   currentPlayerTakingId,
   currentRoundBidsConfirmed,
   firstBidderOfRoundId,
+  firstDealerPlayerId, // Destructured prop
   onSubmitBid,
   onSubmitTaken,
   onConfirmBidsForRound,
@@ -63,6 +65,7 @@ export function ScoreInputTable({
     inputType: 'bid' | 'taken';
     padMin: number;
     padMax: number;
+    excludeNumber?: number | null;
   } | null>(null);
 
   const currentDealerName = allPlayers.find(p => p.id === currentDealerId)?.name;
@@ -90,13 +93,12 @@ export function ScoreInputTable({
 
     let padMin = 0;
     let padMax = cardsDealtForEdit;
-    let excludeNumber: number | null = null;
+    let excludeNumberForPad: number | null = null;
 
     if (inputType === 'bid') {
-        // Check for "Screw the Dealer" for historic bid edits
         const order = playerOrderForGame;
         let historicDealerId = null;
-        if (firstDealerPlayerId && order.length > 0) {
+        if (firstDealerPlayerId && order.length > 0) { // Use the prop here
             const firstDealerIndex = order.indexOf(firstDealerPlayerId);
             if (firstDealerIndex !== -1) {
                 historicDealerId = order[(firstDealerIndex + roundNumber - 1) % order.length];
@@ -112,11 +114,10 @@ export function ScoreInputTable({
             }, 0);
             const forbiddenBid = cardsDealtForEdit - sumOfOtherPlayerBidsHistoric;
             if (forbiddenBid >= 0 && forbiddenBid <= cardsDealtForEdit) {
-                excludeNumber = forbiddenBid; // Will be passed to NumberInputPad
+                excludeNumberForPad = forbiddenBid; 
             }
         }
     } else if (inputType === 'taken') {
-        // For historic 'taken' edits, the edited value must make the sum of taken equal cardsDealtForEdit
         let sumOfOtherTakesInHistoricRound = 0;
         playersScoreData.forEach(pData => {
             if (pData.playerId !== playerId) {
@@ -129,17 +130,12 @@ export function ScoreInputTable({
             padMin = requiredTakeForThisPlayer;
             padMax = requiredTakeForThisPlayer;
         } else {
-            // This implies an inconsistent state or an impossible edit under the rule.
-            // For now, we'll allow editing within 0 to cardsDealt, but the GameManager will re-validate.
-            // Better would be to prevent this popover or show an error.
-            // For simplicity, let the GameManager handle the final validation.
-             // To prevent bad state, we could disallow edit if it implies negativity:
-            padMin = 0; // fallback
-            padMax = cardsDealtForEdit; // fallback
+            padMin = 0; 
+            padMax = cardsDealtForEdit; 
         }
     }
 
-    setEditingCellDetails({ playerId, roundNumber, inputType, padMin, padMax });
+    setEditingCellDetails({ playerId, roundNumber, inputType, padMin, padMax, excludeNumber: excludeNumberForPad });
   };
   
   const closeEditPopover = () => setEditingCellDetails(null);
@@ -280,14 +276,16 @@ export function ScoreInputTable({
                           let takeInputPadMax = cardsForThisRound;
                           if (showTakeInputDirectly) {
                               let sumOfTakesByPreviousPlayersThisRound = 0;
-                              const currentPlayerOrderIndex = playerOrderForGame.indexOf(player.playerId);
-                              const firstTakerOrderIndex = playerOrderForGame.indexOf(firstBidderOfRoundId!);
-
-                              // Determine players who have already taken in this round before the current player
-                              for (let i = 0; i < playerOrderForGame.length; i++) {
-                                  const pIdInOrder = playerOrderForGame[(firstTakerOrderIndex + i) % playerOrderForGame.length];
-                                  if (pIdInOrder === player.playerId) break; // Stop when we reach the current player
-
+                              const order = playerOrderForGame;
+                              const firstTakerEffectiveId = firstBidderOfRoundId; // Player after dealer leads bidding & taking
+                              
+                              let foundCurrentTaker = false;
+                              for (let i = 0; i < order.length; i++) {
+                                  const pIdInOrder = order[(order.indexOf(firstTakerEffectiveId!) + i) % order.length];
+                                  if (pIdInOrder === player.playerId) {
+                                    foundCurrentTaker = true;
+                                    break;
+                                  }
                                   const pData = playersScoreData.find(psd => psd.playerId === pIdInOrder);
                                   const pScoreEntry = pData?.scores.find(s => s.roundNumber === roundInfo.roundNumber);
                                   if (pScoreEntry?.taken !== null && pScoreEntry?.taken !== undefined) {
@@ -295,12 +293,12 @@ export function ScoreInputTable({
                                   }
                               }
                               
-                              const tricksAvailableForCurrentAndSubsequent = cardsForThisRound - sumOfTakesByPreviousPlayersThisRound;
-                              takeInputPadMax = Math.max(0, tricksAvailableForCurrentAndSubsequent);
+                              const tricksRemainingToAllocate = cardsForThisRound - sumOfTakesByPreviousPlayersThisRound;
+                              takeInputPadMax = Math.max(0, tricksRemainingToAllocate);
 
-                              if (player.playerId === currentDealerId) { // Dealer is last to take
-                                  takeInputPadMin = Math.max(0, tricksAvailableForCurrentAndSubsequent);
-                                  takeInputPadMax = takeInputPadMin; // Force dealer's take
+                              if (player.playerId === currentDealerId) { 
+                                  takeInputPadMin = Math.max(0, tricksRemainingToAllocate);
+                                  takeInputPadMax = takeInputPadMin; 
                               }
                           }
 
@@ -344,7 +342,7 @@ export function ScoreInputTable({
                                         min={editingCellDetails.padMin} 
                                         max={editingCellDetails.padMax} 
                                         currentValue={scoreEntry?.bid}
-                                        excludeNumber={inputType === 'bid' && player.playerId === currentDealerId ? excludeNumberForBidPad : null}
+                                        excludeNumber={editingCellDetails.excludeNumber}
                                         onSelectNumber={(val) => {
                                           onEditHistoricScore(player.playerId, roundInfo.roundNumber, 'bid', val.toString());
                                           closeEditPopover();
