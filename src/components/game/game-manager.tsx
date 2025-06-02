@@ -411,35 +411,9 @@ export function GameManager() {
       return;
     }
     
-    if (inputType === 'bid' && cardsForRound !== undefined && firstDealerPlayerId && playerOrderForGame.length > 0) {
-        const order = playerOrderForGame;
-        let historicDealerId = null;
-        const firstDealerIndex = order.indexOf(firstDealerPlayerId);
-        if (firstDealerIndex !== -1) { // Should always find if game started properly
-            historicDealerId = order[(firstDealerIndex + roundNumber - 1) % order.length];
-        }
-
-        if (playerId === historicDealerId) { // Check "Screw the Dealer" for historic bid edit
-            const sumOfOtherPlayerBidsHistoric = playersScoreData.reduce((sum, pData) => {
-                if (pData.playerId !== playerId) {
-                    const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
-                    return sum + (scoreEntry?.bid ?? 0);
-                }
-                return sum;
-            }, 0);
-
-            if (sumOfOtherPlayerBidsHistoric + value === cardsForRound) {
-                toast({
-                    title: "Invalid Historic Bid Edit",
-                    description: `For Round ${roundNumber}, dealer's bid makes total bids (${sumOfOtherPlayerBidsHistoric + value}) equal cards dealt (${cardsForRound}).`,
-                    variant: "destructive",
-                });
-                return;
-            }
-        }
-    }
-    // For 'taken' edits, the validation of sum is handled by row highlighting and cascading,
-    // so we don't block the individual edit here based on sum.
+    // For historic bid edits, the NumberInputPad will handle visual disabling of the dealer's forbidden bid.
+    // Here, we don't reject it if a non-dealer causes the sum issue; instead, we trigger cascade.
+    // For historic 'taken' edits, direct validation here is also minimal, relying on cascade.
 
     let tempUpdatedPlayersScoreData: PlayerScoreData[] = [];
 
@@ -459,63 +433,90 @@ export function GameManager() {
             }
             return scoreEntry; 
           });
-          // Total score recalculated globally after this map
           return { ...playerData, scores: updatedScores };
         }
         return playerData;
-      }).map(p => ({ // Recalculate total score for all players
+      }).map(p => ({ 
         ...p,
         totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
       }));
       return tempUpdatedPlayersScoreData;
     });
     
-    // After state update (or rather, after it's queued, use the temp data for immediate check)
-    if (inputType === 'taken' && cardsForRound !== undefined) {
-      const sumOfTakenInEditedRound = tempUpdatedPlayersScoreData.reduce((acc, pData) => {
-          const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
-          return acc + (scoreEntry?.taken ?? 0);
-      }, 0);
+    const order = playerOrderForGame;
+    if (cardsForRound !== undefined && order.length > 0 && firstDealerPlayerId) {
+        const firstDealerIndex = order.indexOf(firstDealerPlayerId);
+        if (firstDealerIndex === -1) {
+            setCascadingEditTarget(null);
+            toast({ title: "Error", description: "First dealer not found for cascade logic.", variant: "destructive"});
+            return;
+        }
 
-      if (sumOfTakenInEditedRound !== cardsForRound) {
-        const order = playerOrderForGame;
-        if (order.length > 0 && firstDealerPlayerId) {
-            const firstDealerIndex = order.indexOf(firstDealerPlayerId);
-            if (firstDealerIndex !== -1) {
-                const historicDealerIdForRound = order[(firstDealerIndex + roundNumber - 1) % order.length];
-                const historicDealerIndexInOrder = order.indexOf(historicDealerIdForRound);
-                const firstDeclarerForHistoricRound = order[(historicDealerIndexInOrder + 1) % order.length];
-                
-                const declarationOrderForHistoricRound: string[] = [];
-                let editedPlayerIndexInDeclarationOrder = -1;
-                const firstDeclarerIdx = order.indexOf(firstDeclarerForHistoricRound);
+        const historicDealerIdForRound = order[(firstDealerIndex + roundNumber - 1) % order.length];
+        const historicDealerIndexInOrder = order.indexOf(historicDealerIdForRound);
+        
+        // Determine the bidding/declaration order for the historic round
+        const firstDeclarerForHistoricRound = order[(historicDealerIndexInOrder + 1) % order.length];
+        const declarationOrderForHistoricRound: string[] = [];
+        const firstDeclarerIdx = order.indexOf(firstDeclarerForHistoricRound);
 
-                if (firstDeclarerIdx !== -1) {
-                    for (let i = 0; i < order.length; i++) {
-                        const pId = order[(firstDeclarerIdx + i) % order.length];
-                        declarationOrderForHistoricRound.push(pId);
-                        if (pId === playerId) { // The player whose score was just edited
-                            editedPlayerIndexInDeclarationOrder = i;
-                        }
-                    }
+        if (firstDeclarerIdx !== -1) {
+            for (let i = 0; i < order.length; i++) {
+                declarationOrderForHistoricRound.push(order[(firstDeclarerIdx + i) % order.length]);
+            }
+        } else {
+            setCascadingEditTarget(null); // Should not happen
+            return;
+        }
+        
+        let nextPlayerIdToEdit: string | null = null;
+        const editedPlayerIndexInDeclarationOrder = declarationOrderForHistoricRound.indexOf(playerId);
 
-                    if (editedPlayerIndexInDeclarationOrder !== -1) {
-                        const nextPlayerIdToEdit = declarationOrderForHistoricRound[(editedPlayerIndexInDeclarationOrder + 1) % order.length];
-                        setCascadingEditTarget({
-                            playerId: nextPlayerIdToEdit,
-                            roundNumber,
-                            inputType: 'taken',
-                            cardsForCell: cardsForRound,
-                        });
-                    } else { setCascadingEditTarget(null); }
+        if (editedPlayerIndexInDeclarationOrder !== -1) {
+            nextPlayerIdToEdit = declarationOrderForHistoricRound[(editedPlayerIndexInDeclarationOrder + 1) % order.length];
+        }
+
+
+        if (inputType === 'taken') {
+            const sumOfTakenInEditedRound = tempUpdatedPlayersScoreData.reduce((acc, pData) => {
+                const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
+                return acc + (scoreEntry?.taken ?? 0);
+            }, 0);
+
+            if (sumOfTakenInEditedRound !== cardsForRound) {
+                if (nextPlayerIdToEdit) {
+                    setCascadingEditTarget({
+                        playerId: nextPlayerIdToEdit,
+                        roundNumber,
+                        inputType: 'taken',
+                        cardsForCell: cardsForRound,
+                    });
                 } else { setCascadingEditTarget(null); }
-            } else { setCascadingEditTarget(null); }
-        } else { setCascadingEditTarget(null); }
-      } else {
-        setCascadingEditTarget(null); // Sum is correct, stop cascading
-      }
+            } else {
+                setCascadingEditTarget(null); 
+            }
+        } else if (inputType === 'bid') {
+            const sumOfBidsInEditedRound = tempUpdatedPlayersScoreData.reduce((acc, pData) => {
+                const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumber);
+                return acc + (scoreEntry?.bid ?? 0);
+            }, 0);
+
+            if (sumOfBidsInEditedRound === cardsForRound) {
+                if (nextPlayerIdToEdit) {
+                     setCascadingEditTarget({
+                        playerId: nextPlayerIdToEdit,
+                        roundNumber,
+                        inputType: 'bid',
+                        cardsForCell: cardsForRound,
+                    });
+                } else { setCascadingEditTarget(null); }
+            } else {
+                setCascadingEditTarget(null);
+            }
+        }
+
     } else {
-      setCascadingEditTarget(null); // Stop cascade for bid edits
+      setCascadingEditTarget(null); 
     }
 
     const playerName = players.find(p => p.id === playerId)?.name || 'Player';
@@ -524,7 +525,6 @@ export function GameManager() {
 
 
   const handleFinishGame = useCallback(() => {
-    // Check if currently in a state where finishing early isn't ideal (e.g., mid-input)
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && gamePhase === 'SCORING') {
          toast({ title: "Complete Round Bidding", description: "Complete bidding for the current player first.", variant: "destructive" }); return;
     }
@@ -535,17 +535,12 @@ export function GameManager() {
         toast({ title: "Taking in Progress", description: "Complete tricks taken entries for the current player first.", variant: "destructive"}); return;
     }
     
-    // Allow finishing if all inputs for the current step are done, or if game hasn't fully started a round scoring
     setGamePhase('RESULTS');
     setCascadingEditTarget(null);
     toast({ title: "Game Finished Early!", description: "Displaying current scores." });
   }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, toast, gamePhase]);
 
   const handleCascadedEditOpened = useCallback(() => {
-    // Clear the target once ScoreInputTable has acknowledged it by opening the popover
-    // This prevents re-triggering if ScoreInputTable re-renders for other reasons.
-    // A small delay might be even safer if there are rapid state changes.
-    // setTimeout(() => setCascadingEditTarget(null), 0);
     setCascadingEditTarget(null);
   }, []);
 
@@ -562,13 +557,9 @@ export function GameManager() {
     }));
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
     if (!currentRoundInfo && gamePhase === 'SCORING' && gameRounds.length > 0) { 
-        // This state indicates a mismatch, possibly from corrupted local storage or an error.
-        // Resetting might be too aggressive. Consider a gentle error message or allowing setup again.
-        // For now, keeping the reset as a fallback.
         console.error("Error: Could not find current round info. Game state might be corrupted.");
-        // toast({title: "Game Data Error", description: "Resetting to setup. Please start a new game.", variant: "destructive"});
-        handlePlayAgain(); // Trigger a full reset
-        return <p>Error loading round data. Resetting game to setup...</p>; // Show a loading/error message
+        handlePlayAgain(); 
+        return <p>Error loading round data. Resetting game to setup...</p>; 
     }
     return (
       <ScoreInputTable
@@ -584,7 +575,7 @@ export function GameManager() {
         currentPlayerTakingId={currentPlayerTakingId}
         currentRoundBidsConfirmed={currentRoundBidsConfirmed}
         firstBidderOfRoundId={firstBidderOfRoundId}
-        firstDealerPlayerId={firstDealerPlayerId} // Make sure this is passed
+        firstDealerPlayerId={firstDealerPlayerId} 
         cascadingEditTarget={cascadingEditTarget}
         onCascadedEditOpened={handleCascadedEditOpened}
         onSubmitBid={handleSubmitBid}
