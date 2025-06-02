@@ -77,8 +77,8 @@ export function GameManager() {
     setCurrentRoundBidsConfirmed(false);
     localStorage.removeItem('updownRiverScorerState'); 
     localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
-    toast({ title: "New Game Setup", description: "Configure game and add players to start again." });
-  }, [toast]);
+    // toast({ title: "New Game Setup", description: "Configure game and add players to start again." }); // Removed this line
+  }, []);
 
 
   useEffect(() => {
@@ -527,7 +527,7 @@ export function GameManager() {
         currentPlayerTakingId={currentPlayerTakingId}
         currentRoundBidsConfirmed={currentRoundBidsConfirmed}
         firstBidderOfRoundId={firstBidderOfRoundId}
-        firstDealerPlayerId={firstDealerPlayerId} // Pass the prop here
+        firstDealerPlayerId={firstDealerPlayerId}
         onSubmitBid={handleSubmitBid}
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}
