@@ -512,12 +512,11 @@ export function ScoreInputTable({
                                     }}
                                     className="cursor-pointer py-0 flex items-center justify-center min-h-[24px] relative text-xs"
                                     onDoubleClick={() => {
-                                      if (activePopoverDetails) return;
-                                      if(isActiveForBidding || isActiveForTaking) return; // Don't allow double-click if popover is already auto-open for this
+                                      if (activePopoverDetails && !isGameReallyOver) return; 
+                                      if(isActiveForBidding || isActiveForTaking) return;
                                       
-                                      // If historic, or if current round but not player's turn to live input
                                       const typeToEdit = (scoreEntry?.bid === null || (isCurrentDisplayRound && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING')) ? 'bid' : 'taken';
-                                      const cellRefForDoubleClick = cellRefs.current[historicBidCellKey]; // Use the consistent ref
+                                      const cellRefForDoubleClick = cellRefs.current[historicBidCellKey];
                                       if (cellRefForDoubleClick) {
                                          handleHistoricCellInteraction(player.playerId, roundInfo.roundNumber, typeToEdit, roundInfo.cardsDealt, cellRefForDoubleClick);
                                       }
@@ -525,23 +524,23 @@ export function ScoreInputTable({
                                   >
                                     {isActiveForBidding && (
                                         <span className="flex items-center justify-center">
-                                            B:<span className={cn(bidText === '-' ? "text-muted-foreground" : scoreEntry?.bid !== null ? "" : "")}>{bidText}</span>
+                                            B:<span className={cn(bidText === '-' ? "text-muted-foreground" : "px-0.5")}>{bidText}</span>
                                             <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
                                         </span>
                                     )}
                                     {isActiveForTaking && (
                                         <span className="flex items-center justify-center">
-                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : scoreEntry?.bid !== null ? "" : "")}>{bidText}</span>
+                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "px-0.5")}>{bidText}</span>
                                             <span>/T:</span>
-                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : scoreEntry?.taken !== null ? "" : "")}>{takenText}</span>
+                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "px-0.5")}>{takenText}</span>
                                             <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
                                         </span>
                                     )}
                                     {!isActiveForBidding && !isActiveForTaking && (
                                         <span className="flex items-center justify-center">
-                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : scoreEntry?.bid !== null ? "" : "")}>{bidText}</span>
+                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "px-0.5")}>{bidText}</span>
                                             <span>/</span>
-                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : scoreEntry?.taken !== null ? "" : "")}>{takenText}</span>
+                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "px-0.5")}>{takenText}</span>
                                             <span>→{scoreText}</span>
                                         </span>
                                     )}
@@ -660,22 +659,6 @@ export function ScoreInputTable({
               </Button>
             )}
             
-            {gamePhase === 'SCORING' && ( 
-              <div className="flex-grow text-center p-0.5 text-muted-foreground h-8 items-center justify-center flex text-xs">
-                  {currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && !currentRoundBidsConfirmed && (
-                      currentPlayerActiveName ? `${currentPlayerActiveName} bidding...` : `Waiting for bids...`
-                  )}
-                  {currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
-                      `Confirm bids in the table to proceed...`
-                  )}
-                  {currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && (
-                      currentPlayerActiveName ? `${currentPlayerActiveName} entering tricks...` : `Waiting for tricks...`
-                  )}
-                  {currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && currentRoundForInput <= gameRounds.length && (
-                      `Processing R${currentRoundForInput}...`
-                  )}
-              </div>
-            )}
           </div>
         )}
         {gamePhase === 'DEALER_SELECTION' && (
