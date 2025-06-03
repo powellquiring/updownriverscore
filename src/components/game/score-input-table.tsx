@@ -181,12 +181,13 @@ export function ScoreInputTable({
         if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; 
         
         if (playerWhosePadIsBeingConfigured === dealerForRelevantRoundId) {
-            // For dealer (live or historic), their bid cannot make sum of bids equal cards dealt
             return sumOfOtherPlayerBids + num_on_pad === cardsDealt; 
         }
         
-        // For non-dealers (historic edits): allow sum to be cardsDealt to trigger cascade.
-        // For non-dealers (live bids): they are not the last, so this is fine (no specific rule violation for them alone).
+        if (isHistoricEditContext) { // For non-dealer historic edits
+            return false; // Allow sums to be equal to cards dealt to trigger cascade
+        }
+        // For live, non-dealer bids - this is fine, they are not the last bidder
         return false; 
     };
   };
@@ -235,7 +236,6 @@ export function ScoreInputTable({
       if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; 
 
       if (isHistoricEditContext) {
-         // For historic edits, only check basic bounds. Cascade handles sum.
          return false; 
       }
 
@@ -295,7 +295,7 @@ export function ScoreInputTable({
                     colSpan={playersScoreData.length} 
                     className="text-center text-xs text-muted-foreground py-0 px-0"
                   >
-                    B/T→S
+                    Round/Cards Bid/Take -&gt; Score
                     {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && <Edit3 className="h-3 w-3 inline ml-0.5 opacity-50" title="Double-click scores to edit"/>}
                   </TableHead>
                 </TableRow>
@@ -352,7 +352,7 @@ export function ScoreInputTable({
                           const isCellHistoricContext = roundInfo.roundNumber < currentRoundForInput || isGameReallyOver || 
                                                         (isCurrentDisplayRound && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed && isEditingHistoricBid) || 
                                                         (isCurrentDisplayRound && currentRoundBidsConfirmed && isEditingHistoricTake && !isActiveForTakingLive) ||
-                                                        (isGameReallyOver && isEditingThisCellForHistoric); // Allow historic context for game over edits
+                                                        (isGameReallyOver && isEditingThisCellForHistoric);
 
 
                           const isBidInvalidCallback = getIsBidInvalid(roundInfo, player.playerId, isCellHistoricContext);
@@ -373,7 +373,7 @@ export function ScoreInputTable({
                                   <div 
                                     className="cursor-pointer py-0.5 flex items-center justify-center min-h-[30px] relative text-xs"
                                     onDoubleClick={() => {
-                                      if (!showLiveInputPopover && !(isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed && editingCellDetails?.inputType === 'taken')) {
+                                      if (!showLiveInputPopover && !(isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed && (isGameReallyOver ? true : editingCellDetails?.inputType === 'taken'))) {
                                         const typeToEdit = (isCurrentDisplayRound && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) || 
                                                               (scoreEntry?.bid !== null && scoreEntry?.taken === null && !isCurrentDisplayRound && !isGameReallyOver) ||
                                                               (isGameReallyOver && scoreEntry?.bid !== null && scoreEntry?.taken === null)
@@ -397,14 +397,14 @@ export function ScoreInputTable({
                                     {!showLiveInputPopover && (
                                       <>
                                         <span
-                                          className={cn("cursor-pointer hover:bg-muted/50 rounded-sm", isEditingHistoricBid && "font-bold", scoreEntry?.bid !== null ? "px-0.5" : "")}
+                                          className={cn("cursor-pointer hover:bg-muted/50 rounded-sm", isEditingHistoricBid && "font-bold", scoreEntry?.bid !== null ? "" : "")}
                                           onDoubleClick={(e) => { e.stopPropagation(); handleOpenEditPopover(player.playerId, roundInfo.roundNumber, 'bid', roundInfo.cardsDealt);}}
                                         >
                                           {scoreEntry?.bid ?? '-'}
                                         </span>
                                         <span>/</span>
                                         <span
-                                          className={cn("cursor-pointer hover:bg-muted/50 rounded-sm", isEditingHistoricTake && "font-bold", scoreEntry?.taken !== null ? "px-0.5" : "")}
+                                          className={cn("cursor-pointer hover:bg-muted/50 rounded-sm", isEditingHistoricTake && "font-bold", scoreEntry?.taken !== null ? "" : "")}
                                           onDoubleClick={(e) => { 
                                             e.stopPropagation();
                                             if (!isGameReallyOver && isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) {
@@ -431,7 +431,6 @@ export function ScoreInputTable({
                                       else if (isActiveForTakingLive) onSubmitTaken(player.playerId, val.toString());
                                       else if (editingCellDetails) {
                                         onEditHistoricScore(player.playerId, roundInfo.roundNumber, editingCellDetails.inputType, val.toString());
-                                        // closeEditPopover(); // GameManager will clear cascadingEditTarget, which then clears editingCellDetails
                                       }
                                     }}
                                     currentValue={
