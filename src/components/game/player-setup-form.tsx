@@ -56,8 +56,8 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
       toast({ title: "Player name cannot be empty.", variant: "destructive" });
       return;
     }
-    if (players.length >= 6) { 
-        toast({ title: "Maximum of 6 players allowed.", variant: "destructive" });
+    if (players.length >= 7) { 
+        toast({ title: "Maximum of 7 players allowed.", variant: "destructive" });
         return;
     }
     onAddPlayer(playerName.trim());
@@ -134,14 +134,14 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
               aria-label="Player name"
               className="flex-grow"
             />
-            <Button type="submit" aria-label="Add player" disabled={players.length >= 6}>
+            <Button type="submit" aria-label="Add player" disabled={players.length >= 7}>
               <PlusCircle className="h-5 w-5 mr-2" /> Add Player
             </Button>
           </form>
 
           {players.length > 0 && (
             <div>
-              <h4 className="text-md font-medium mb-2 text-foreground">Current Players ({players.length}/6):</h4>
+              <h4 className="text-md font-medium mb-2 text-foreground">Current Players ({players.length}/7):</h4>
               <ul className="space-y-2">
                 {players.map((player) => (
                   <li key={player.id} className="flex items-center justify-between bg-secondary p-3 rounded-md shadow-sm">
