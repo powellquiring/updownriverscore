@@ -264,7 +264,7 @@ export function GameManager() {
     if (nextBidderId === firstBidderOfRoundId) { 
         setCurrentPlayerBiddingId(null); 
         setCascadingEditTarget(null);
-        toast({ title: "All Bids In!", description: `All bids submitted for Round ${currentRoundForInput}. Click 'Confirm Bids' to proceed.` });
+        toast({ title: "All Bids In!", description: `All bids submitted for Round ${currentRoundForInput}. Click 'Enter Tricks' to proceed.` });
     } else {
         setCurrentPlayerBiddingId(nextBidderId);
         const nextBidderName = players.find(p => p.id === nextBidderId)?.name || 'Next Player';
@@ -284,6 +284,41 @@ export function GameManager() {
     const firstTakerName = players.find(p=> p.id === firstBidderOfRoundId)?.name || 'First Player';
     toast({ title: "Bids Confirmed!", description: `Now enter tricks taken. ${firstTakerName} to start.` });
   }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId, players, toast]);
+
+
+  const handleAdvanceRoundOrEndGame = useCallback(() => {
+    if (currentRoundForInput < gameRounds.length) {
+      const newRoundNumber = currentRoundForInput + 1;
+      setCurrentRoundForInput(newRoundNumber);
+      
+      const order = playerOrderForGame;
+      const previousDealerIndex = order.indexOf(currentDealerId!); 
+      const newDealerId = order[(previousDealerIndex + 1) % order.length];
+      setCurrentDealerId(newDealerId);
+      
+      const newDealerIndexInOrder = order.indexOf(newDealerId);
+      const newFirstBidderId = order[(newDealerIndexInOrder + 1) % order.length];
+      setCurrentPlayerBiddingId(newFirstBidderId);
+      setFirstBidderOfRoundId(newFirstBidderId);
+      
+      setCurrentRoundInputMode('BIDDING');
+      setCurrentRoundBidsConfirmed(false); 
+      
+      const dealerName = players.find(p => p.id === newDealerId)?.name || 'New Dealer';
+      const firstBidderName = players.find(p => p.id === newFirstBidderId)?.name || 'Next';
+      const cardsForNewRound = gameRounds.find(r => r.roundNumber === newRoundNumber)?.cardsDealt;
+      toast({ title: `Starting Round ${newRoundNumber}`, description: `${dealerName} is dealer. Dealing ${cardsForNewRound} cards. ${firstBidderName} to bid.`});
+    } else { 
+      setGamePhase('RESULTS');
+      setCurrentPlayerBiddingId(null);
+      setCurrentPlayerTakingId(null);
+      setCurrentRoundInputMode('BIDDING'); 
+      setCurrentRoundBidsConfirmed(false);
+      setCascadingEditTarget(null);
+      toast({ title: "Game Finished!", description: "All rounds completed. Final scores are displayed below." });
+    }
+  }, [currentRoundForInput, gameRounds, playerOrderForGame, currentDealerId, players, toast]);
+
 
   const handleSubmitTaken = useCallback((playerId: string, takenStr: string) => {
     if (playerId !== currentPlayerTakingId || !currentRoundBidsConfirmed) {
@@ -344,37 +379,9 @@ export function GameManager() {
 
     if (isLastPlayerToTake) { 
         setCurrentPlayerTakingId(null); 
-
-        if (currentRoundForInput < gameRounds.length) {
-            const newRoundNumber = currentRoundForInput + 1;
-            setCurrentRoundForInput(newRoundNumber);
-            
-            const previousDealerIndex = order.indexOf(currentDealerId!); 
-            const newDealerId = order[(previousDealerIndex + 1) % order.length];
-            setCurrentDealerId(newDealerId);
-            
-            const newDealerIndexInOrder = order.indexOf(newDealerId);
-            const newFirstBidderId = order[(newDealerIndexInOrder + 1) % order.length];
-            setCurrentPlayerBiddingId(newFirstBidderId);
-            setFirstBidderOfRoundId(newFirstBidderId);
-            
-            setCurrentRoundInputMode('BIDDING');
-            setCurrentRoundBidsConfirmed(false); 
-            
-            const dealerName = players.find(p => p.id === newDealerId)?.name || 'New Dealer';
-            const firstBidderName = players.find(p => p.id === newFirstBidderId)?.name || 'Next';
-            const cardsForNewRound = gameRounds.find(r => r.roundNumber === newRoundNumber)?.cardsDealt;
-            toast({ title: `Starting Round ${newRoundNumber}`, description: `${dealerName} is dealer. Dealing ${cardsForNewRound} cards. ${firstBidderName} to bid.`});
-        } else { 
-            setGamePhase('RESULTS');
-            setCurrentPlayerBiddingId(null);
-            setCurrentPlayerTakingId(null);
-            setCurrentRoundInputMode('BIDDING');
-            setCurrentRoundBidsConfirmed(false);
-            setCascadingEditTarget(null);
-            toast({ title: "Game Finished!", description: "All rounds completed. Final scores are displayed below." });
-        }
-
+        const playerNameWhoTook = players.find(p => p.id === playerId)?.name || "Player";
+        toast({ title: "Tricks Taken Submitted", description: `Tricks taken by ${playerNameWhoTook} submitted. All tricks for Round ${currentRoundForInput} recorded. Click 'Start Next Round' or 'Show Final Scores'.` });
+        // Advancing to next round or results is now handled by onAdvanceRoundOrEndGame, triggered by ScoreInputTable
     } else {
         setCurrentPlayerTakingId(nextTakerId);
         const nextTakerName = players.find(p => p.id === nextTakerId)?.name || 'Next Player';
@@ -382,7 +389,7 @@ export function GameManager() {
     }
   }, [
     currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, 
-    playerOrderForGame, firstBidderOfRoundId, players, toast, currentDealerId, playersScoreData
+    playerOrderForGame, firstBidderOfRoundId, players, toast, playersScoreData
   ]);
 
   const handleEditHistoricScore = useCallback((
@@ -536,6 +543,9 @@ export function GameManager() {
     if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
         toast({ title: "Taking in Progress", description: "Complete tricks taken entries for the current player first.", variant: "destructive"}); return;
     }
+     if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
+        toast({ title: "Confirm Round Completion", description: "Please confirm completion of the current round's tricks first.", variant: "destructive"}); return;
+    }
     
     setGamePhase('RESULTS');
     setCurrentPlayerBiddingId(null);
@@ -594,6 +604,7 @@ export function GameManager() {
         onSubmitBid={handleSubmitBid}
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}
+        onAdvanceRoundOrEndGame={handleAdvanceRoundOrEndGame}
         onEditHistoricScore={handleEditHistoricScore}
         onFinishGame={handleFinishGameEarly} // Renamed for clarity
         onRestartGame={handlePlayAgain}

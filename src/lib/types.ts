@@ -27,7 +27,7 @@ export interface PlayerScoreData {
 export type GamePhase = 'SETUP' | 'DEALER_SELECTION' | 'SCORING' | 'RESULTS';
 export type CurrentRoundInputMode = 'BIDDING' | 'TAKING';
 
-export type PopoverInputType = 'bid' | 'taken' | 'CONFIRM_BIDS';
+export type PopoverInputType = 'bid' | 'taken' | 'CONFIRM_BIDS' | 'CONFIRM_TAKEN';
 
 export interface ActivePopoverDetails {
   playerId: string | null; 
@@ -40,7 +40,7 @@ export interface ActivePopoverDetails {
   currentValue?: number | null;
   isNumberInvalid?: (num: number) => boolean;
   onSelectNumber?: (value: number) => void;
-  onConfirmAction?: () => void; // For CONFIRM_BIDS popover
+  onConfirmAction?: () => void; // For CONFIRM_BIDS or CONFIRM_TAKEN popovers
 }
 
 export interface CascadingEditTarget {
@@ -69,8 +69,10 @@ export interface ScoreInputTableProps {
   onSubmitBid: (playerId: string, bid: string) => void;
   onSubmitTaken: (playerId: string, taken: string) => void;
   onConfirmBidsForRound: () => void;
+  onAdvanceRoundOrEndGame: () => void; // New prop
   onEditHistoricScore: (playerId: string, roundNumber: number, inputType: 'bid' | 'taken', value: string) => void;
   onFinishGame: () => void;
   onRestartGame: () => void;
   onSelectDealer: (playerId: string) => void;
 }
+

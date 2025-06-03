@@ -31,6 +31,7 @@ export function ScoreInputTable({
   onSubmitBid,
   onSubmitTaken,
   onConfirmBidsForRound,
+  onAdvanceRoundOrEndGame,
   onEditHistoricScore,
   onFinishGame,
   onRestartGame,
@@ -57,18 +58,16 @@ export function ScoreInputTable({
       let calculatedTop: number;
       let calculatedLeft: number;
 
-      // Default to centering on table if no specific trigger or for confirm bids (unless trigger is preserved)
-      let useCentering = activePopoverDetails.inputType === 'CONFIRM_BIDS' && !activePopoverDetails.triggerElement;
+      let useCentering = (activePopoverDetails.inputType === 'CONFIRM_BIDS' || activePopoverDetails.inputType === 'CONFIRM_TAKEN') && !activePopoverDetails.triggerElement;
 
 
       if (useCentering || !activePopoverDetails.triggerElement) {
-        const popoverHeightEstimate = activePopoverDetails.inputType === 'CONFIRM_BIDS' ? 120 : 200; // Adjust for NumberInputPad
+        const popoverHeightEstimate = (activePopoverDetails.inputType === 'CONFIRM_BIDS' || activePopoverDetails.inputType === 'CONFIRM_TAKEN') ? 120 : 200; 
         calculatedTop = tableWrapperRect.top + (tableWrapperRect.height / 2) - (popoverHeightEstimate / 2) + window.scrollY;
         calculatedLeft = tableWrapperRect.left + (tableWrapperRect.width / 2) - (POPOVER_WIDTH_PX / 2) + window.scrollX;
       } else if (activePopoverDetails.triggerElement) {
         const cellRect = activePopoverDetails.triggerElement.getBoundingClientRect();
         calculatedTop = cellRect.bottom + window.scrollY + POPOVER_OFFSET_Y;
-        // Horizontally center relative to the table for all cases if triggerElement is present
         calculatedLeft = tableWrapperRect.left + (tableWrapperRect.width / 2) - (POPOVER_WIDTH_PX / 2) + window.scrollX;
       } else {
         setPopoverPosition(null);
@@ -214,30 +213,27 @@ export function ScoreInputTable({
           currentValue: scoreEntry?.bid ?? null,
         });
       }
-      return;
     }
-
-    // 2. Handle "Confirm Bids" Popover (now reuses last trigger position)
-    if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) {
+    // 2. Handle "Confirm Bids" Popover
+    else if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) {
       if (activePopoverDetails?.inputType !== 'CONFIRM_BIDS') { 
         setActivePopoverDetails({
-          playerId: null, // No specific player for confirm action itself
+          playerId: null,
           roundNumber: currentRoundForInput,
           inputType: 'CONFIRM_BIDS',
-          cardsForCell: null, // Not relevant for confirm button
-          triggerElement: lastLiveTriggerElementRef.current, // Reuse last live trigger for positioning
-          playerName: "All Bids In", // Title for the popover
+          cardsForCell: null,
+          triggerElement: lastLiveTriggerElementRef.current,
+          playerName: "All Bids In",
           isLive: true,
           onConfirmAction: () => { 
             onConfirmBidsForRound(); 
+            setActivePopoverDetails(null); // Close popover after action
           },
         });
       }
-      return;
     }
-
     // 3. Handle Taking Popover
-    if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId && currentRoundBidsConfirmed) {
+    else if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId && currentRoundBidsConfirmed) {
       const cellKey = `cell-${currentPlayerTakingId}-${currentRoundForInput}-taken`; 
       const triggerElement = cellRefs.current[cellKey];
       const player = allPlayers.find(p => p.id === currentPlayerTakingId);
@@ -258,22 +254,42 @@ export function ScoreInputTable({
           currentValue: scoreEntry?.taken ?? null,
         });
       }
-      return;
     }
-    
-    if (activePopoverDetails && activePopoverDetails.isLive) {
-      // If none of the above conditions for an active live popover are met, close it.
-      // This handles the case where the game moves to the next round, or finishes.
-      if (activePopoverDetails.inputType !== 'CONFIRM_BIDS' || currentPlayerBiddingId !== null || currentRoundBidsConfirmed) {
-         setActivePopoverDetails(null);
+    // 4. Handle "Confirm Taken" Popover
+    else if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
+        if (activePopoverDetails?.inputType !== 'CONFIRM_TAKEN') {
+          setActivePopoverDetails({
+            playerId: null,
+            roundNumber: currentRoundForInput,
+            inputType: 'CONFIRM_TAKEN',
+            cardsForCell: null,
+            triggerElement: lastLiveTriggerElementRef.current,
+            playerName: "All Tricks In!",
+            isLive: true,
+            onConfirmAction: () => {
+              onAdvanceRoundOrEndGame();
+              setActivePopoverDetails(null); // Close popover after action
+            },
+          });
+        }
+    }
+    // 5. Close live popover if conditions no longer met
+    else {
+       const shouldLivePopoverBeOpen =
+        (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId && !currentRoundBidsConfirmed) ||
+        (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) ||
+        (currentRoundInputMode === 'TAKING' && currentPlayerTakingId && currentRoundBidsConfirmed) ||
+        (currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && gamePhase === 'SCORING');
+
+      if (activePopoverDetails && activePopoverDetails.isLive && !shouldLivePopoverBeOpen) {
+        setActivePopoverDetails(null);
       }
     }
-
   }, [
       gamePhase, currentRoundInputMode, currentPlayerBiddingId, currentRoundBidsConfirmed,
       currentPlayerTakingId, currentRoundForInput, gameRounds, allPlayers, playersScoreData,
-      onSubmitBid, onSubmitTaken, onConfirmBidsForRound, getIsBidInvalid, getIsTakenInvalid,
-      activePopoverDetails 
+      onSubmitBid, onSubmitTaken, onConfirmBidsForRound, onAdvanceRoundOrEndGame,
+      getIsBidInvalid, getIsTakenInvalid, activePopoverDetails
   ]);
 
 
@@ -292,6 +308,7 @@ export function ScoreInputTable({
       if (triggerElement && player) {
         const onSelectHistoric = (value: number) => {
           onEditHistoricScore(cascadingEditTarget.playerId, cascadingEditTarget.roundNumber, cascadingEditTarget.inputType, value.toString());
+          // Consider closing popover here or let GameManager state changes handle it via main useEffect
         };
         
         const isInvalidCb = cascadingEditTarget.inputType === 'bid'
@@ -300,7 +317,6 @@ export function ScoreInputTable({
         
         const currentVal = cascadingEditTarget.inputType === 'bid' ? scoreEntry?.bid : scoreEntry?.taken;
         
-        // Ensure any live popover is closed before opening historic
         if (activePopoverDetails?.isLive) setActivePopoverDetails(null);
 
         setActivePopoverDetails({
@@ -348,6 +364,7 @@ export function ScoreInputTable({
     if (player && roundConfigForCell) {
       const onSelectHistoric = (value: number) => {
         onEditHistoricScore(playerId, roundNumber, inputTypeToEdit, value.toString());
+        // Do not close popover here if cascading edit might follow
       };
 
       const isInvalidCb = inputTypeToEdit === 'bid' 
@@ -404,10 +421,14 @@ export function ScoreInputTable({
         } else if (!currentRoundBidsConfirmed) {
              phaseText = 'All Bids In! Confirm round to proceed.'; 
         } else { 
-            phaseText = 'Bidding Phase Complete';
+            phaseText = 'Bidding Phase Complete'; // Should not happen if popover handles confirm
         }
       } else if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
-        phaseText = currentPlayerTakingId ? `Taking: ${currentPlayerActiveName}'s turn` : `All Tricks Taken for Round ${currentRoundForInput}. Processing...`;
+          if (currentPlayerTakingId) {
+            phaseText = `Taking: ${currentPlayerActiveName}'s turn`;
+          } else {
+             phaseText = `All Tricks In! Confirm round to proceed.`;
+          }
       }
       const dealerInfo = currentDealerName ? `(D: ${currentDealerName})` : '';
       return `Scores - R${currentRoundForInput}/${gameRounds.length} (C:${currentRoundConfig.cardsDealt}) ${dealerInfo} - ${phaseText}`;
@@ -419,7 +440,6 @@ export function ScoreInputTable({
     if (gamePhase === 'RESULTS') return "Game Over! Final scores are displayed. Double-click score to correct. Press 'Play New Game' to start again.";
     if (gamePhase === 'DEALER_SELECTION') return "Click player's name to select as first dealer.";
     if (gamePhase === 'SCORING') {
-      // Caption is removed as per user request, explanation text was here.
       return "Double-click any score to correct past entries.";
     }
     return "";
@@ -668,6 +688,15 @@ export function ScoreInputTable({
                             Enter Tricks
                         </Button>
                     </>
+                ) : activePopoverDetails && activePopoverDetails.inputType === 'CONFIRM_TAKEN' && activePopoverDetails.onConfirmAction ? (
+                    <>
+                        <div className="text-base sm:text-lg font-semibold text-center mb-3 text-popover-foreground h-6 sm:h-8 flex items-center justify-center overflow-hidden truncate">
+                            {activePopoverDetails.playerName || "Round Complete"}
+                        </div>
+                        <Button onClick={activePopoverDetails.onConfirmAction} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+                             { currentRoundForInput < gameRounds.length ? "Enter Bids for Next Round" : "Show Final Scores" }
+                        </Button>
+                    </>
                 ) : activePopoverDetails && (activePopoverDetails.inputType === 'bid' || activePopoverDetails.inputType === 'taken') && activePopoverDetails.onSelectNumber ? (
                 <>
                     <div className="text-base sm:text-lg font-semibold text-center mb-2 text-popover-foreground h-6 sm:h-8 flex items-center justify-center overflow-hidden truncate">
@@ -700,9 +729,9 @@ export function ScoreInputTable({
                   size="sm" 
                   className="w-full sm:w-auto text-xs"
                   disabled={ 
-                    (currentRoundInputMode === 'BIDDING' && (currentPlayerBiddingId !== null || (!currentRoundBidsConfirmed && activePopoverDetails?.inputType !== 'CONFIRM_BIDS'))) || 
-                    (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed) ||
-                    (activePopoverDetails?.isLive === true && activePopoverDetails.inputType !== 'CONFIRM_BIDS') 
+                      (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null) ||
+                      (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed) ||
+                      (activePopoverDetails?.isLive === true && activePopoverDetails.inputType !== 'CONFIRM_BIDS' && activePopoverDetails.inputType !== 'CONFIRM_TAKEN')
                   }
               >
                   <Flag className="mr-1 h-3 w-3" /> Finish Early
