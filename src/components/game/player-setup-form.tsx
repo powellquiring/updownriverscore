@@ -26,7 +26,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
 
   const isStartGameButtonDisabled = () => {
     const numMaxCards = parseInt(maxCardsInHand, 10);
-    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) { // Changed from 10 to 7
+    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) {
         return true;
     }
     if (players.length < 2) {
@@ -39,12 +39,11 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     const canStart = !isStartGameButtonDisabled();
     if (canStart && startGameButtonRef.current) {
       const activeElement = document.activeElement;
-      // Only focus if no input/textarea is currently focused and the button itself isn't focused
       if (
         !(activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) &&
         activeElement !== startGameButtonRef.current
       ) {
-        // startGameButtonRef.current.focus(); // Auto-focus can be disruptive, user request implies it being ready
+        // startGameButtonRef.current.focus(); 
       }
     }
   }, [players, maxCardsInHand]);
@@ -66,9 +65,8 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
 
   const handleInitiateGame = () => {
     const numMaxCards = parseInt(maxCardsInHand, 10);
-    // Validation is also in isStartGameButtonDisabled, but good to double check here
-    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) { // Changed from 10 to 7
-      toast({ title: "Invalid Max Cards", description: "Max cards per hand must be a number between 1 and 7.", variant: "destructive" }); // Changed from 10 to 7
+    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) {
+      toast({ title: "Invalid Max Cards", description: "Max cards per hand must be a number between 1 and 7.", variant: "destructive" });
       return;
     }
     if (players.length < 2) {
@@ -82,6 +80,18 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     if (event.key === 'Enter' && !isStartGameButtonDisabled()) {
       event.preventDefault();
       handleInitiateGame();
+    }
+  };
+
+  const handlePlayerNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      if (playerName.trim() === '' && !isStartGameButtonDisabled()) {
+        event.preventDefault(); // Prevent form submission (which would try to add an empty player)
+        handleInitiateGame();
+      }
+      // If playerName is not empty, the form's onSubmit will handle adding the player.
+      // If playerName is empty but game cannot be started, the form's onSubmit will trigger,
+      // and handleAddPlayerFormSubmit will show its "name cannot be empty" toast.
     }
   };
 
@@ -109,7 +119,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
               onChange={(e) => setMaxCardsInHand(e.target.value)}
               onKeyDown={handleMaxCardsKeyDown}
               min="1"
-              max="7" // Changed from 10 to 7
+              max="7"
               placeholder="e.g., 7"
               className="w-full"
               aria-describedby="max-cards-description"
@@ -130,6 +140,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
               type="text"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
+              onKeyDown={handlePlayerNameKeyDown} // Added this line
               placeholder="Enter player name"
               aria-label="Player name"
               className="flex-grow"
