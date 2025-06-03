@@ -47,7 +47,7 @@ export function ScoreInputTable({
   const isGameReallyOver = gamePhase === 'RESULTS';
 
   const POPOVER_WIDTH_PX = 224; // Corresponds to w-56
-  const POPOVER_OFFSET_Y = 8; // Gap below the cell
+  const POPOVER_OFFSET_Y = 32; // Gap below the cell, increased by approx one row height (was 8)
 
   // Effect to calculate popover position
   useEffect(() => {
@@ -275,7 +275,6 @@ export function ScoreInputTable({
     if (gamePhase === 'RESULTS') return "Game Over! Final scores are displayed. Double-click score to correct. Press 'Play New Game' to start again.";
     if (gamePhase === 'DEALER_SELECTION') return "Click player's name to select as first dealer.";
     if (gamePhase === 'SCORING') {
-      //Removed explanation text as per user request
       return "Double-click any score to correct past entries.";
     }
     return "";
@@ -518,24 +517,25 @@ export function ScoreInputTable({
                                   >
                                     {isActiveForBidding && (
                                         <span className="flex items-center justify-center">
-                                            B:<span className={cn(bidText === '-' ? "text-muted-foreground" : "")}>{bidText}</span>
-                                            {takenText !== '-' && <span>/T:{takenText}</span>}
+                                            B:
+                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "", bidText !== '-' && "px-0.5")}>{bidText}</span>
+                                            {takenText !== '-' && <span>/T:<span className={cn(takenText !== '-' && "px-0.5")}>{takenText}</span></span>}
                                             <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
                                         </span>
                                     )}
                                     {isActiveForTaking && (
                                         <span className="flex items-center justify-center">
-                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "")}>{bidText}</span>
+                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "", bidText !== '-' && "px-0.5")}>{bidText}</span>
                                             <span>/T:</span>
-                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "")}>{takenText}</span>
+                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "", takenText !== '-' && "px-0.5")}>{takenText}</span>
                                             <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
                                         </span>
                                     )}
                                     {!isActiveForBidding && !isActiveForTaking && (
                                         <span className="flex items-center justify-center">
-                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "")}>{bidText}</span>
+                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "", bidText !== '-' && "px-0.5")}>{bidText}</span>
                                             <span>/</span>
-                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "")}>{takenText}</span>
+                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "", takenText !== '-' && "px-0.5")}>{takenText}</span>
                                             <span>→{scoreText}</span>
                                         </span>
                                     )}
