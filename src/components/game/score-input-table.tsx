@@ -183,7 +183,8 @@ export function ScoreInputTable({
     cardsDealtForRound: number,
     triggerElem: HTMLDivElement
   ) => {
-    if (activePopoverDetails) return;
+    // Do not open popover if one is already active, unless it's for the game over screen where this restriction is less critical
+    if (activePopoverDetails && !isGameReallyOver) return;
 
     const isCurrentRoundLiveInput = roundNumber === currentRoundForInput && gamePhase === 'SCORING';
     if (isCurrentRoundLiveInput) {
@@ -274,14 +275,7 @@ export function ScoreInputTable({
     if (gamePhase === 'RESULTS') return "Game Over! Final scores are displayed. Double-click score to correct. Press 'Play New Game' to start again.";
     if (gamePhase === 'DEALER_SELECTION') return "Click player's name to select as first dealer.";
     if (gamePhase === 'SCORING') {
-      if (currentRoundInputMode === 'BIDDING') {
-        if (currentPlayerBiddingId) return `Player ${currentPlayerActiveName || 'Next'} is bidding.`;
-        if (!currentRoundBidsConfirmed) return `All bids for Round ${currentRoundForInput} are recorded. Click the green button below to confirm.`;
-      }
-      if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
-        if (currentPlayerTakingId) return `Player ${currentPlayerActiveName || 'Next'} is entering tricks taken.`;
-        return `All tricks taken for Round ${currentRoundForInput} are entered. Game will proceed to next round or results. Double-click score to correct.`;
-      }
+      //Removed explanation text as per user request
       return "Double-click any score to correct past entries.";
     }
     return "";
@@ -493,7 +487,7 @@ export function ScoreInputTable({
                           const scoreText = scoreEntry?.roundScore.toString() ?? '0';
 
                           const liveCellKey = isActiveForBidding ? `${cellKeyBase}-bid` : isActiveForTaking ? `${cellKeyBase}-taken` : '';
-                          const historicBidCellKey = `${cellKeyBase}-bid`; // Used for double click on either bid or take part for historic
+                          const historicBidCellKey = `${cellKeyBase}-bid`; 
                           
                           if (liveCellKey && !cellRefs.current[liveCellKey]) cellRefs.current[liveCellKey] = null;
                           if (!cellRefs.current[historicBidCellKey]) cellRefs.current[historicBidCellKey] = null;
@@ -524,23 +518,24 @@ export function ScoreInputTable({
                                   >
                                     {isActiveForBidding && (
                                         <span className="flex items-center justify-center">
-                                            B:<span className={cn(bidText === '-' ? "text-muted-foreground" : "px-0.5")}>{bidText}</span>
+                                            B:<span className={cn(bidText === '-' ? "text-muted-foreground" : "")}>{bidText}</span>
+                                            {takenText !== '-' && <span>/T:{takenText}</span>}
                                             <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
                                         </span>
                                     )}
                                     {isActiveForTaking && (
                                         <span className="flex items-center justify-center">
-                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "px-0.5")}>{bidText}</span>
+                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "")}>{bidText}</span>
                                             <span>/T:</span>
-                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "px-0.5")}>{takenText}</span>
+                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "")}>{takenText}</span>
                                             <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
                                         </span>
                                     )}
                                     {!isActiveForBidding && !isActiveForTaking && (
                                         <span className="flex items-center justify-center">
-                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "px-0.5")}>{bidText}</span>
+                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : "")}>{bidText}</span>
                                             <span>/</span>
-                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "px-0.5")}>{takenText}</span>
+                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : "")}>{takenText}</span>
                                             <span>→{scoreText}</span>
                                         </span>
                                     )}
@@ -622,6 +617,7 @@ export function ScoreInputTable({
                 {activePopoverDetails && (
                 <>
                     <div className="text-base sm:text-lg font-semibold text-center mb-2 text-popover-foreground h-6 sm:h-8 flex items-center justify-center overflow-hidden truncate">
+                        {activePopoverDetails.inputType === 'bid' ? 'Bidding: ' : 'Taking: '}
                         {activePopoverDetails.playerName}
                     </div>
                     <NumberInputPad 
