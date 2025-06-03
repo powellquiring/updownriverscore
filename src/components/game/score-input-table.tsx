@@ -415,7 +415,7 @@ export function ScoreInputTable({
                     key={player.playerId} 
                     className={cn(
                         "min-w-[15px] sm:min-w-[25px] text-center font-semibold px-0.5 py-0.5 text-xs truncate",
-                        player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/20"
+                        player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30"
                     )}
                    >
                     {gamePhase === 'DEALER_SELECTION' && onSelectDealer ? (
@@ -493,7 +493,7 @@ export function ScoreInputTable({
                           const scoreText = scoreEntry?.roundScore.toString() ?? '0';
 
                           const liveCellKey = isActiveForBidding ? `${cellKeyBase}-bid` : isActiveForTaking ? `${cellKeyBase}-taken` : '';
-                          const historicBidCellKey = `${cellKeyBase}-bid`;
+                          const historicBidCellKey = `${cellKeyBase}-bid`; // Used for double click on either bid or take part for historic
                           
                           if (liveCellKey && !cellRefs.current[liveCellKey]) cellRefs.current[liveCellKey] = null;
                           if (!cellRefs.current[historicBidCellKey]) cellRefs.current[historicBidCellKey] = null;
@@ -502,7 +502,7 @@ export function ScoreInputTable({
                             <TableCell key={`${player.playerId}-${roundInfo.roundNumber}`} 
                                 className={cn(
                                     "text-center align-middle py-0 px-0",
-                                    player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/20"
+                                    player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30"
                                 )}
                             >
                                   <div 
@@ -513,10 +513,11 @@ export function ScoreInputTable({
                                     className="cursor-pointer py-0 flex items-center justify-center min-h-[24px] relative text-xs"
                                     onDoubleClick={() => {
                                       if (activePopoverDetails) return;
-                                      if(isActiveForBidding || isActiveForTaking) return;
+                                      if(isActiveForBidding || isActiveForTaking) return; // Don't allow double-click if popover is already auto-open for this
                                       
+                                      // If historic, or if current round but not player's turn to live input
                                       const typeToEdit = (scoreEntry?.bid === null || (isCurrentDisplayRound && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING')) ? 'bid' : 'taken';
-                                      const cellRefForDoubleClick = cellRefs.current[historicBidCellKey];
+                                      const cellRefForDoubleClick = cellRefs.current[historicBidCellKey]; // Use the consistent ref
                                       if (cellRefForDoubleClick) {
                                          handleHistoricCellInteraction(player.playerId, roundInfo.roundNumber, typeToEdit, roundInfo.cardsDealt, cellRefForDoubleClick);
                                       }
@@ -524,15 +525,15 @@ export function ScoreInputTable({
                                   >
                                     {isActiveForBidding && (
                                         <span className="flex items-center justify-center">
-                                            B:<span className={cn(bidText === '-' ? "text-muted-foreground" : scoreEntry?.bid !== null ? "px-0.5" : "")}>{bidText}</span>
+                                            B:<span className={cn(bidText === '-' ? "text-muted-foreground" : scoreEntry?.bid !== null ? "" : "")}>{bidText}</span>
                                             <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
                                         </span>
                                     )}
                                     {isActiveForTaking && (
                                         <span className="flex items-center justify-center">
-                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : scoreEntry?.bid !== null ? "px-0.5" : "")}>{bidText}</span>
+                                            <span className={cn(bidText === '-' ? "text-muted-foreground" : scoreEntry?.bid !== null ? "" : "")}>{bidText}</span>
                                             <span>/T:</span>
-                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : scoreEntry?.taken !== null ? "px-0.5" : "")}>{takenText}</span>
+                                            <span className={cn(takenText === '-' ? "text-muted-foreground" : scoreEntry?.taken !== null ? "" : "")}>{takenText}</span>
                                             <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
                                         </span>
                                     )}
@@ -584,7 +585,7 @@ export function ScoreInputTable({
                             className={cn(
                                 "text-center font-bold text-xs sm:text-sm p-0.5", 
                                 rankStyle,
-                                player.playerId === activePlayerIdForColumnHighlight && gamePhase === 'SCORING' && "bg-secondary/20"
+                                player.playerId === activePlayerIdForColumnHighlight && gamePhase === 'SCORING' && "bg-secondary/30"
                             )}
                         >
                           {player.totalScore} {awardIcon}
@@ -607,7 +608,7 @@ export function ScoreInputTable({
             }}
         >
             <PopoverContent
-                className="p-2 sm:p-3 w-56 bg-popover shadow-lg rounded-md border"
+                className="p-3 w-56 bg-popover shadow-lg rounded-md border"
                 style={popoverPosition ? {
                     position: 'fixed',
                     top: `${popoverPosition.top}px`,
@@ -616,11 +617,13 @@ export function ScoreInputTable({
                 } : { display: 'none' }}
                 onOpenAutoFocus={(e) => e.preventDefault()} 
                 onCloseAutoFocus={(e) => e.preventDefault()}
+                 side="bottom" 
+                 align="center"
             >
                 {activePopoverDetails && (
                 <>
-                    <div className="text-base sm:text-lg font-semibold text-center mb-1 sm:mb-2 text-popover-foreground h-6 sm:h-8 flex items-center justify-center overflow-hidden">
-                        <span className="truncate">{activePopoverDetails.playerName}</span>
+                    <div className="text-base sm:text-lg font-semibold text-center mb-2 text-popover-foreground h-6 sm:h-8 flex items-center justify-center overflow-hidden truncate">
+                        {activePopoverDetails.playerName}
                     </div>
                     <NumberInputPad 
                         min={0} 
