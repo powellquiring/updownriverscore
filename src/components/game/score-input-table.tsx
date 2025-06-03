@@ -198,7 +198,7 @@ export function ScoreInputTable({
       const player = allPlayers.find(p => p.id === currentPlayerBiddingId);
       const scoreEntry = playersScoreData.find(psd => psd.playerId === currentPlayerBiddingId)?.scores.find(s => s.roundNumber === currentRoundForInput);
 
-      if (triggerElement && player && (activePopoverDetails?.playerId !== currentPlayerBiddingId || activePopoverDetails?.inputType !== 'bid')) {
+      if (triggerElement && player && (activePopoverDetails?.playerId !== currentPlayerBiddingId || activePopoverDetails?.inputType !== 'bid' || !activePopoverDetails?.isLive)) {
         lastLiveTriggerElementRef.current = triggerElement;
         setActivePopoverDetails({
           playerId: currentPlayerBiddingId,
@@ -216,18 +216,18 @@ export function ScoreInputTable({
     }
     // 2. Handle "Confirm Bids" Popover
     else if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed) {
-      if (activePopoverDetails?.inputType !== 'CONFIRM_BIDS') { 
+      if (activePopoverDetails?.inputType !== 'CONFIRM_BIDS' || !activePopoverDetails?.isLive) { 
         setActivePopoverDetails({
           playerId: null,
           roundNumber: currentRoundForInput,
           inputType: 'CONFIRM_BIDS',
           cardsForCell: null,
-          triggerElement: lastLiveTriggerElementRef.current,
+          triggerElement: lastLiveTriggerElementRef.current, 
           playerName: "All Bids In",
           isLive: true,
           onConfirmAction: () => { 
             onConfirmBidsForRound(); 
-            setActivePopoverDetails(null); // Close popover after action
+            setActivePopoverDetails(null);
           },
         });
       }
@@ -239,7 +239,7 @@ export function ScoreInputTable({
       const player = allPlayers.find(p => p.id === currentPlayerTakingId);
       const scoreEntry = playersScoreData.find(psd => psd.playerId === currentPlayerTakingId)?.scores.find(s => s.roundNumber === currentRoundForInput);
       
-      if (triggerElement && player && (activePopoverDetails?.playerId !== currentPlayerTakingId || activePopoverDetails?.inputType !== 'taken')) {
+      if (triggerElement && player && (activePopoverDetails?.playerId !== currentPlayerTakingId || activePopoverDetails?.inputType !== 'taken' || !activePopoverDetails?.isLive)) {
         lastLiveTriggerElementRef.current = triggerElement;
         setActivePopoverDetails({
           playerId: currentPlayerTakingId,
@@ -257,18 +257,18 @@ export function ScoreInputTable({
     }
     // 4. Handle "Confirm Taken" Popover
     else if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
-        if (activePopoverDetails?.inputType !== 'CONFIRM_TAKEN') {
+        if (activePopoverDetails?.inputType !== 'CONFIRM_TAKEN' || !activePopoverDetails?.isLive) {
           setActivePopoverDetails({
             playerId: null,
             roundNumber: currentRoundForInput,
             inputType: 'CONFIRM_TAKEN',
             cardsForCell: null,
-            triggerElement: lastLiveTriggerElementRef.current,
+            triggerElement: lastLiveTriggerElementRef.current, 
             playerName: "All Tricks In!",
             isLive: true,
             onConfirmAction: () => {
               onAdvanceRoundOrEndGame();
-              setActivePopoverDetails(null); // Close popover after action
+              setActivePopoverDetails(null); 
             },
           });
         }
@@ -289,7 +289,7 @@ export function ScoreInputTable({
       gamePhase, currentRoundInputMode, currentPlayerBiddingId, currentRoundBidsConfirmed,
       currentPlayerTakingId, currentRoundForInput, gameRounds, allPlayers, playersScoreData,
       onSubmitBid, onSubmitTaken, onConfirmBidsForRound, onAdvanceRoundOrEndGame,
-      getIsBidInvalid, getIsTakenInvalid, activePopoverDetails
+      getIsBidInvalid, getIsTakenInvalid, activePopoverDetails // Include activePopoverDetails to re-evaluate if its state changes externally
   ]);
 
 
@@ -308,7 +308,6 @@ export function ScoreInputTable({
       if (triggerElement && player) {
         const onSelectHistoric = (value: number) => {
           onEditHistoricScore(cascadingEditTarget.playerId, cascadingEditTarget.roundNumber, cascadingEditTarget.inputType, value.toString());
-          // Consider closing popover here or let GameManager state changes handle it via main useEffect
         };
         
         const isInvalidCb = cascadingEditTarget.inputType === 'bid'
@@ -338,15 +337,13 @@ export function ScoreInputTable({
   }, [cascadingEditTarget, onCascadedEditOpened, gameRounds, allPlayers, playersScoreData, onEditHistoricScore, getIsBidInvalid, getIsTakenInvalid]);
 
 
-  const handleHistoricCellInteraction = (
+  const handleHistoricCellInteraction = useCallback((
     playerId: string,
     roundNumber: number,
     inputTypeToEdit: 'bid' | 'taken',
     cardsDealtForRound: number,
     triggerElem: HTMLDivElement
   ) => {
-    if (activePopoverDetails && !isGameReallyOver && activePopoverDetails.isLive) return; 
-
     const isCurrentRoundLiveBidding = roundNumber === currentRoundForInput && gamePhase === 'SCORING' &&
                                      inputTypeToEdit === 'bid' && currentRoundInputMode === 'BIDDING' && 
                                      !currentRoundBidsConfirmed && playerId === currentPlayerBiddingId;
@@ -364,7 +361,6 @@ export function ScoreInputTable({
     if (player && roundConfigForCell) {
       const onSelectHistoric = (value: number) => {
         onEditHistoricScore(playerId, roundNumber, inputTypeToEdit, value.toString());
-        // Do not close popover here if cascading edit might follow
       };
 
       const isInvalidCb = inputTypeToEdit === 'bid' 
@@ -386,7 +382,12 @@ export function ScoreInputTable({
         currentValue: currentVal ?? null,
       });
     }
-  };
+  }, [
+    allPlayers, playersScoreData, gameRounds, onEditHistoricScore, 
+    getIsBidInvalid, getIsTakenInvalid, 
+    currentRoundForInput, gamePhase, currentRoundInputMode, 
+    currentRoundBidsConfirmed, currentPlayerBiddingId, currentPlayerTakingId
+  ]);
   
   const currentDealerName = allPlayers.find(p => p.id === currentDealerId)?.name;
   let currentPlayerActiveName = '';
@@ -421,7 +422,7 @@ export function ScoreInputTable({
         } else if (!currentRoundBidsConfirmed) {
              phaseText = 'All Bids In! Confirm round to proceed.'; 
         } else { 
-            phaseText = 'Bidding Phase Complete'; // Should not happen if popover handles confirm
+            phaseText = 'Bidding Phase Complete';
         }
       } else if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
           if (currentPlayerTakingId) {
@@ -572,7 +573,6 @@ export function ScoreInputTable({
                                     }}
                                     className="cursor-pointer py-0 flex items-center justify-center min-h-[24px] relative text-xs"
                                     onDoubleClick={() => {
-                                      if (activePopoverDetails?.isLive && !isGameReallyOver) return; 
                                       if(isActiveForBidding || isActiveForTaking) return; 
                                       
                                       let typeToEdit: 'bid' | 'taken' = 'bid';
@@ -717,7 +717,7 @@ export function ScoreInputTable({
 
 
         {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (
-          <div className="mt-2 flex flex-col sm:flex-row justify-between items-center gap-1 sm:gap-2">
+          <div className="mt-2 px-1 sm:px-0 flex flex-col sm:flex-row justify-between items-center gap-1 sm:gap-2">
             <Button onClick={onRestartGame} variant="outline" size="sm" className="w-full sm:w-auto text-xs">
               <RefreshCw className="mr-1 h-3 w-3" /> {gamePhase === 'RESULTS' ? "Play New Game" : "Restart Game"}
             </Button>
@@ -741,7 +741,7 @@ export function ScoreInputTable({
           </div>
         )}
         {gamePhase === 'DEALER_SELECTION' && (
-          <div className="mt-4 flex justify-end items-center gap-4">
+          <div className="mt-4 px-1 sm:px-0 flex justify-end items-center gap-4">
             <Button onClick={onRestartGame} variant="outline" size="default">
               <RefreshCw className="mr-1 h-4 w-4" /> Back to Setup
             </Button>
