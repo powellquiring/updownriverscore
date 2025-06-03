@@ -26,7 +26,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
 
   const isStartGameButtonDisabled = () => {
     const numMaxCards = parseInt(maxCardsInHand, 10);
-    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 10) {
+    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) { // Changed from 10 to 7
         return true;
     }
     if (players.length < 2) {
@@ -67,8 +67,8 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
   const handleInitiateGame = () => {
     const numMaxCards = parseInt(maxCardsInHand, 10);
     // Validation is also in isStartGameButtonDisabled, but good to double check here
-    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 10) {
-      toast({ title: "Invalid Max Cards", description: "Max cards per hand must be a number between 1 and 10.", variant: "destructive" });
+    if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) { // Changed from 10 to 7
+      toast({ title: "Invalid Max Cards", description: "Max cards per hand must be a number between 1 and 7.", variant: "destructive" }); // Changed from 10 to 7
       return;
     }
     if (players.length < 2) {
@@ -109,7 +109,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
               onChange={(e) => setMaxCardsInHand(e.target.value)}
               onKeyDown={handleMaxCardsKeyDown}
               min="1"
-              max="10" 
+              max="7" // Changed from 10 to 7
               placeholder="e.g., 7"
               className="w-full"
               aria-describedby="max-cards-description"
