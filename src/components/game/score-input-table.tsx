@@ -49,7 +49,7 @@ export function ScoreInputTable({
   const isGameReallyOver = gamePhase === 'RESULTS';
 
   useEffect(() => {
-    if (cascadingEditTarget && onCascadedEditOpened) { // Removed !isGameReallyOver to allow cascade in RESULTS phase
+    if (cascadingEditTarget && onCascadedEditOpened) { 
       if (
         !editingCellDetails ||
         editingCellDetails.playerId !== cascadingEditTarget.playerId ||
@@ -82,12 +82,11 @@ export function ScoreInputTable({
     inputType: 'bid' | 'taken',
     cardsForCell: number
   ) => {
-    // Allow edits even if game is over, specific cell active state checks remain
-    const isCurrentActiveBidCell = roundNumber === currentRoundForInput && inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING' && !isGameReallyOver;
-    const isCurrentActiveTakeCell = roundNumber === currentRoundForInput && inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed && !isGameReallyOver;
+    const isCurrentActiveBidCell = !isGameReallyOver && roundNumber === currentRoundForInput && inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING';
+    const isCurrentActiveTakeCell = !isGameReallyOver && roundNumber === currentRoundForInput && inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed;
     
     if (isCurrentActiveBidCell || isCurrentActiveTakeCell) return; 
-    if (roundNumber === currentRoundForInput && inputType === 'taken' && !currentRoundBidsConfirmed && !isGameReallyOver) return;
+    if (!isGameReallyOver && roundNumber === currentRoundForInput && inputType === 'taken' && !currentRoundBidsConfirmed) return;
 
     setEditingCellDetails({ 
         playerId, 
@@ -101,7 +100,7 @@ export function ScoreInputTable({
 
   if (gamePhase === 'SCORING' && !currentRoundConfig && gameRounds.length > 0 && currentRoundForInput <= gameRounds.length ) return <p>Loading round configuration...</p>;
 
-  const roundsToDisplay = (gamePhase === 'RESULTS' || currentRoundForInput > gameRounds.length) && gameRounds.length > 0 
+  const roundsToDisplay = (isGameReallyOver || currentRoundForInput > gameRounds.length) && gameRounds.length > 0 
     ? gameRounds 
     : gameRounds.filter(roundInfo => roundInfo.roundNumber <= currentRoundForInput);
 
@@ -177,13 +176,11 @@ export function ScoreInputTable({
 
     return (num_on_pad: number) => {
         if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; 
-        // If it's the dealer (live or historic edit), they cannot make the sum equal cardsDealt
         if (playerWhosePadIsBeingConfigured === dealerForRelevantRoundId) {
             return sumOfOtherPlayerBids + num_on_pad === cardsDealt; 
         }
-        // For historic non-dealer edits, they CAN make the sum equal cardsDealt (triggering cascade)
-        // For live non-dealer bids, this check is also fine (they are not the last to bid)
-        return false;
+        if(isHistoricEditContext) return false; // For non-dealer historic edits, allow sum to be cardsDealt to trigger cascade
+        return false; // For live non-dealer bids, they are not the last, so this is fine
     };
   };
 
@@ -209,7 +206,7 @@ export function ScoreInputTable({
     
     if (!firstDeclarerForThisRoundId) return () => false; 
 
-    let sumOfTakesByPriorPlayersInOrder = 0;
+    let sumOfTakesByPlayersBeforeThisOneInOrder = 0;
     const firstDeclarerActualIndex = order.indexOf(firstDeclarerForThisRoundId);
     if (firstDeclarerActualIndex === -1) return () => false;
 
@@ -222,17 +219,16 @@ export function ScoreInputTable({
       }
       const pData = playersScoreData.find(ps => ps.playerId === currentPlayerInSequenceId);
       const scoreEntry = pData?.scores.find(s => s.roundNumber === roundNumForCheck);
-      sumOfTakesByPriorPlayersInOrder += (scoreEntry?.taken ?? 0);
+      sumOfTakesByPlayersBeforeThisOneInOrder += (scoreEntry?.taken ?? 0);
     }
     
-    const tricksAvailableForAllocationFromThisPlayerOnwards = cardsDealt - sumOfTakesByPriorPlayersInOrder;
+    const tricksAvailableForAllocationFromThisPlayerOnwards = cardsDealt - sumOfTakesByPlayersBeforeThisOneInOrder;
 
     return (num_on_pad: number) => {
       if (num_on_pad < 0 || num_on_pad > cardsDealt) return true; 
 
       if (isHistoricEditContext) {
-         // For historic edits, only check basic bounds. Cascade handles sum.
-        return false;
+        return false; // For historic edits, only check basic bounds. Cascade handles sum.
       }
 
       // Live input validation:
@@ -267,10 +263,9 @@ export function ScoreInputTable({
             <TableCaption>{getTableCaption()}</TableCaption>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px] font-semibold">{gamePhase === 'DEALER_SELECTION' ? 'Players' : 'Round'}</TableHead>
-                <TableHead className="w-[60px] font-semibold">{gamePhase === 'DEALER_SELECTION' ? '' : 'Cards'}</TableHead>
+                <TableHead className="w-[50px] sm:w-[60px] font-semibold">{gamePhase === 'DEALER_SELECTION' ? 'Players' : 'R/C'}</TableHead>
                 {playersForDisplay.map(player => (
-                  <TableHead key={player.playerId} className="min-w-[120px] sm:min-w-[150px] text-center font-semibold">
+                  <TableHead key={player.playerId} className="min-w-[100px] sm:min-w-[120px] text-center font-semibold">
                     {gamePhase === 'DEALER_SELECTION' && onSelectDealer ? (
                       <Button variant="ghost" className="w-full h-auto p-1 text-base hover:bg-primary/20" onClick={() => onSelectDealer(player.playerId)}>
                         <UserCheck className="mr-2 h-5 w-5 text-accent" /> {player.name}
@@ -287,8 +282,7 @@ export function ScoreInputTable({
               </TableRow>
                {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && playersScoreData.length > 0 && (
                 <TableRow className="border-b-0">
-                  <TableHead className="py-1"></TableHead> {}
-                  <TableHead className="py-1"></TableHead> {}
+                  <TableHead className="py-1"></TableHead> 
                   <TableHead 
                     colSpan={playersScoreData.length} 
                     className="text-center text-xs text-muted-foreground py-1 px-0"
@@ -299,7 +293,7 @@ export function ScoreInputTable({
                 </TableRow>
               )}
             </TableHeader>
-            {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (gameRounds.length > 0 || playersScoreData.length > 0 ) && ( // Ensure table body renders if we have data even if rounds aren't configured (e.g. straight to results from load)
+            {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (gameRounds.length > 0 || playersScoreData.length > 0 ) && (
               <>
                 <TableBody>
                   {roundsToDisplay.map((roundInfo) => {
@@ -334,8 +328,7 @@ export function ScoreInputTable({
                         !isCurrentDisplayRound && !isGameReallyOver ? 'opacity-80 hover:opacity-100' : '',
                         (isProblematicBidSum || isProblematicTakenSum) ? 'bg-destructive/10' : ''
                       )}>
-                        <TableCell className="font-medium">{roundInfo.roundNumber}</TableCell>
-                        <TableCell>{roundInfo.cardsDealt}</TableCell>
+                        <TableCell className="font-medium text-xs sm:text-sm">{`${roundInfo.roundNumber}/${roundInfo.cardsDealt}`}</TableCell>
                         {playersScoreData.map(player => {
                           const scoreEntry = player.scores.find(s => s.roundNumber === roundInfo.roundNumber);
                           const cellKey = `${player.playerId}-${roundInfo.roundNumber}`;
@@ -348,11 +341,9 @@ export function ScoreInputTable({
                           const isEditingHistoricBid = isEditingThisCellForHistoric && editingCellDetails.inputType === 'bid';
                           const isEditingHistoricTake = isEditingThisCellForHistoric && editingCellDetails.inputType === 'taken';
                           
-                          // Determine if the context is historic for invalidation logic
-                          // It's historic if it's not the current round for input, OR if the game is over.
                           const isCellHistoricContext = roundInfo.roundNumber < currentRoundForInput || isGameReallyOver || 
-                                                        (isCurrentDisplayRound && currentRoundInputMode === 'TAKING' && isEditingHistoricBid) || // Editing bid of current round after bids confirmed
-                                                        (isCurrentDisplayRound && currentRoundBidsConfirmed && isEditingHistoricTake); // Editing take of current round (even if it's active player's turn, this is handled)
+                                                        (isCurrentDisplayRound && currentRoundInputMode === 'TAKING' && isEditingHistoricBid) || 
+                                                        (isCurrentDisplayRound && currentRoundBidsConfirmed && isEditingHistoricTake && !isActiveForTakingLive); 
 
 
                           const isBidInvalidCallback = getIsBidInvalid(roundInfo, player.playerId, isCellHistoricContext);
@@ -413,7 +404,7 @@ export function ScoreInputTable({
                                         min={0} 
                                         max={editingCellDetails.cardsForCell} 
                                         currentValue={scoreEntry?.bid}
-                                        isNumberInvalid={getIsBidInvalid(roundInfo, player.playerId, true)} // Always historic context for this popover
+                                        isNumberInvalid={getIsBidInvalid(roundInfo, player.playerId, true)}
                                         onSelectNumber={(val) => {
                                           onEditHistoricScore(player.playerId, roundInfo.roundNumber, 'bid', val.toString());
                                           closeEditPopover();
@@ -430,13 +421,12 @@ export function ScoreInputTable({
                                       <span
                                         className={cn("cursor-pointer hover:bg-muted/50 px-0.5 sm:px-1 py-0.5 rounded-sm")}
                                         onDoubleClick={() => {
-                                           // Allow editing 'taken' unless it's current round, bidding phase, and bids not confirmed
-                                           if (!(!isGameReallyOver && isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed)) {
+                                           if (!(isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed)) {
                                               handleOpenEditPopover(player.playerId, roundInfo.roundNumber, 'taken', roundInfo.cardsDealt)
                                             }
                                         }}
                                       >
-                                        {(!isGameReallyOver && isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) ? '-' : (scoreEntry?.taken ?? '-')}
+                                        {(isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) ? '-' : (scoreEntry?.taken ?? '-')}
                                       </span>
                                     </PopoverTrigger>
                                     {editingCellDetails && isEditingHistoricTake && (
@@ -445,7 +435,7 @@ export function ScoreInputTable({
                                         min={0} 
                                         max={editingCellDetails.cardsForCell} 
                                         currentValue={scoreEntry?.taken}
-                                        isNumberInvalid={getIsTakenInvalid(roundInfo, player.playerId, true)} // Always historic context for this popover
+                                        isNumberInvalid={getIsTakenInvalid(roundInfo, player.playerId, true)} 
                                         onSelectNumber={(val) => {
                                           onEditHistoricScore(player.playerId, roundInfo.roundNumber, 'taken', val.toString());
                                           closeEditPopover();
@@ -464,7 +454,7 @@ export function ScoreInputTable({
                       </TableRow>
                       {!isGameReallyOver && isCurrentDisplayRound && gamePhase === 'SCORING' && currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
                         <TableRow className="bg-card border-t border-b border-border">
-                          <TableCell colSpan={2 + playersScoreData.length} className="text-center py-2 px-1">
+                          <TableCell colSpan={1 + playersScoreData.length} className="text-center py-2 px-1">
                             <Button
                               onClick={onConfirmBidsForRound}
                               className="w-full max-w-md mx-auto bg-green-500 hover:bg-green-600 text-white text-sm font-semibold"
@@ -481,7 +471,7 @@ export function ScoreInputTable({
                 </TableBody>
                 <TableFooter>
                   <TableRow className="bg-card border-t-2 border-primary">
-                    <TableCell colSpan={2} className="font-bold text-lg text-right">Total</TableCell>
+                    <TableCell className="font-bold text-lg text-right">Total</TableCell>
                     {playersScoreData.map(player => {
                       const rank = getPlayerRank(player.playerId);
                       let rankStyle = "text-primary-foreground";
