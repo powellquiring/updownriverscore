@@ -27,7 +27,50 @@ export interface PlayerScoreData {
 export type GamePhase = 'SETUP' | 'DEALER_SELECTION' | 'SCORING' | 'RESULTS';
 export type CurrentRoundInputMode = 'BIDDING' | 'TAKING';
 
-// Props for ScoreInputTable might need adjustment if these new states are passed down directly
-// or handled via existing structures. For now, keeping GameManager responsible.
+export type PopoverInputType = 'bid' | 'taken' | 'CONFIRM_BIDS';
 
+export interface ActivePopoverDetails {
+  playerId: string | null; 
+  roundNumber: number | null; 
+  inputType: PopoverInputType;
+  cardsForCell: number | null; 
+  triggerElement: HTMLDivElement | null; 
+  playerName: string | null; 
+  isLive: boolean; // Indicates if the popover is for the live game flow vs. historic edit
+  currentValue?: number | null;
+  isNumberInvalid?: (num: number) => boolean;
+  onSelectNumber?: (value: number) => void;
+  onConfirmAction?: () => void; // For CONFIRM_BIDS popover
+}
 
+export interface CascadingEditTarget {
+  playerId: string;
+  roundNumber: number;
+  inputType: 'bid' | 'taken';
+  cardsForCell: number;
+}
+
+export interface ScoreInputTableProps {
+  playersScoreData: PlayerScoreData[];
+  allPlayers: Player[];
+  playerOrderForGame: string[];
+  gameRounds: GameRoundInfo[];
+  currentRoundForInput: number;
+  gamePhase: GamePhase;
+  currentRoundInputMode: CurrentRoundInputMode;
+  currentDealerId: string | null;
+  currentPlayerBiddingId: string | null;
+  currentPlayerTakingId: string | null;
+  currentRoundBidsConfirmed: boolean;
+  firstBidderOfRoundId: string | null;
+  firstDealerPlayerId: string | null;
+  cascadingEditTarget: CascadingEditTarget | null;
+  onCascadedEditOpened: () => void;
+  onSubmitBid: (playerId: string, bid: string) => void;
+  onSubmitTaken: (playerId: string, taken: string) => void;
+  onConfirmBidsForRound: () => void;
+  onEditHistoricScore: (playerId: string, roundNumber: number, inputType: 'bid' | 'taken', value: string) => void;
+  onFinishGame: () => void;
+  onRestartGame: () => void;
+  onSelectDealer: (playerId: string) => void;
+}
