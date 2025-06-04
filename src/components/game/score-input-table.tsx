@@ -105,7 +105,7 @@ export function ScoreInputTable({
     playerWhosePadIsBeingConfigured: string,        
     isHistoricEditContext: boolean 
   ): ((num_on_pad: number) => boolean) => {
-    if (!roundConfigForCheck || !firstDealerPlayerId || !firstBidderOfRoundId || playerOrderForGame.length === 0) {
+    if (!roundConfigForCheck || !firstDealerPlayerId || playerOrderForGame.length === 0) { // firstBidderOfRoundId removed as it's complex for historic contexts
       return () => false; 
     }
     const cardsDealt = roundConfigForCheck.cardsDealt;
@@ -120,11 +120,8 @@ export function ScoreInputTable({
         return (num_on_pad: number) => num_on_pad < 0 || num_on_pad > cardsDealt;
     }
 
-    let actualFirstDeclarerId = firstBidderOfRoundId; 
-    if (roundNumForCheck !== currentRoundForInput) { 
-        return (num_on_pad: number) => num_on_pad < 0 || num_on_pad > cardsDealt;
-    }
-
+    // For live input (not historic edit)
+    const actualFirstDeclarerId = firstBidderOfRoundId; // Use firstBidderOfRoundId for live context
     const actualDealerId = currentDealerId; 
     if (!actualFirstDeclarerId || !actualDealerId) return () => false;
 
@@ -158,18 +155,17 @@ export function ScoreInputTable({
         return num_on_pad > tricksAvailableForAllocationFromThisPlayerOnwards;
       }
     };
-  }, [playersScoreData, firstDealerPlayerId, playerOrderForGame, firstBidderOfRoundId, currentRoundForInput, currentDealerId]);
+  }, [playersScoreData, firstDealerPlayerId, playerOrderForGame, firstBidderOfRoundId, currentDealerId]);
 
 
   useEffect(() => {
     if (activePopoverDetails && !activePopoverDetails.isLive) {
-      return; 
+       // This guard prevents the live popover logic from interfering
+       // with an already open historic/cascading edit popover.
+      return;
     }
+
     if (cascadingEditTarget && onCascadedEditOpened && gameRounds.length > 0) {
-      if (activePopoverDetails && !activePopoverDetails.isLive) {
-         onCascadedEditOpened(); 
-         return;
-      }
       const roundConfigForCascade = gameRounds.find(r => r.roundNumber === cascadingEditTarget.roundNumber);
       if (!roundConfigForCascade) return;
 
@@ -477,18 +473,18 @@ export function ScoreInputTable({
                                     onDoubleClick={() => {
                                       if(isActiveForBidding || isActiveForTaking) return;
                                       
-                                      let inputTypeToEdit: PopoverInputType = 'bid'; // Default
+                                      let inputTypeToEdit: PopoverInputType = 'bid';
                                       const isCurrentDisplayRoundForDoubleClick = gamePhase === 'SCORING' && roundInfo.roundNumber === currentRoundForInput;
 
                                       if (scoreEntry?.bid === null || (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING')) {
                                         inputTypeToEdit = 'bid';
                                       } else if (scoreEntry?.taken === null || (isCurrentDisplayRoundForDoubleClick && currentRoundBidsConfirmed && currentRoundInputMode === 'TAKING') || (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null)) {
-                                         if(isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null) {
+                                          if(isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null) {
                                               inputTypeToEdit = (scoreEntry?.taken === null && scoreEntry?.bid !== null) ? 'taken' : 'bid';
                                               if (currentRoundBidsConfirmed) inputTypeToEdit = 'taken';
-                                         } else {
+                                          } else {
                                             inputTypeToEdit = 'taken';
-                                         }
+                                          }
                                       }
                                       
                                       if (inputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) return;
@@ -587,7 +583,7 @@ export function ScoreInputTable({
                 isNumberInvalid={numPadIsInvalidFn}
               />
             </div>
-            <div className="w-full md:flex-grow md:pl-4 flex items-center justify-center md:justify-start pt-2 md:pt-6">
+            <div className="w-full flex justify-center md:justify-end items-center pt-2 md:pt-6 md:pl-4">
               {currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
                 <Button onClick={onConfirmBidsForRound} className="w-full md:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">Enter Tricks</Button>
               )}
@@ -607,7 +603,7 @@ export function ScoreInputTable({
           open={!!activePopoverDetails && !!popoverPosition && !activePopoverDetails.isLive} 
           onOpenChange={(isOpen) => {
               if (!isOpen) {
-                if (activePopoverDetails && !activePopoverDetails.isLive) {
+                if (activePopoverDetails && !activePopoverDetails.isLive) { // Only close if it's a non-live popover
                   setActivePopoverDetails(null);
                 }
               }
@@ -676,4 +672,3 @@ export function ScoreInputTable({
     </Card>
   );
 }
-
