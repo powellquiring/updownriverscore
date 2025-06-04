@@ -484,17 +484,17 @@ export function ScoreInputTable({
                                       } else if (scoreEntry?.taken === null || (isCurrentDisplayRoundForDoubleClick && currentRoundBidsConfirmed && currentRoundInputMode === 'TAKING')) {
                                         inputTypeToEdit = 'taken';
                                       } else if (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null) {
-                                          // If bids are confirmed for the current round, but we are still in BIDDING mode (meaning editing a historic bid of the current round)
-                                          // and the 'taken' for this cell is null, default to editing 'taken'
                                           inputTypeToEdit = (scoreEntry?.taken === null) ? 'taken' : 'bid'; 
-                                      } else if (scoreEntry?.taken !== null) { // If taken is not null, prefer editing taken
+                                      } else if (scoreEntry?.taken !== null) { 
                                           inputTypeToEdit = 'taken';
-                                      } else if (scoreEntry?.bid !== null) { // If bid is not null (and taken is null), prefer editing bid
+                                      } else if (scoreEntry?.bid !== null) { 
                                           inputTypeToEdit = 'bid';
                                       }
-                                      // Final check: if we decided on 'taken' but round bids aren't confirmed for CURRENT round, and it IS the current round, switch back to 'bid'
+                                     
                                       if (inputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) {
-                                          inputTypeToEdit = 'bid'; // Cannot edit 'taken' if bids for current round aren't confirmed
+                                        // Cannot edit 'taken' if bids for current round aren't confirmed
+                                        // Allow editing 'bid' instead if 'taken' was targeted but not allowed
+                                        inputTypeToEdit = 'bid'; 
                                       }
 
 
@@ -573,7 +573,7 @@ export function ScoreInputTable({
       {gamePhase === 'SCORING' && currentRoundConfig && (
         <div className="mt-auto p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-3">
-            <div className="w-full max-w-[66vw] md:w-auto md:max-w-none">
+            <div className="w-full md:w-auto">
               <p className="text-sm font-medium text-center md:text-left mb-1 h-5 truncate">
                 {numPadActionText || " "}
               </p>
@@ -590,6 +590,7 @@ export function ScoreInputTable({
                 currentValue={numPadCurrentValue}
                 disabled={numPadDisabled}
                 isNumberInvalid={numPadIsInvalidFn}
+                className="max-w-[66vw] md:max-w-none"
               />
             </div>
             <div className="w-full flex justify-center md:justify-end items-center pt-2 md:pt-6 md:pl-4">

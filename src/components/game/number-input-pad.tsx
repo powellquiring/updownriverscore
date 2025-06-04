@@ -12,6 +12,7 @@ interface NumberInputPadProps {
   currentValue?: number | null;
   disabled?: boolean; // Overall disabled state for the pad
   isNumberInvalid?: (num: number) => boolean; // Callback to check if a specific number is invalid
+  className?: string; // Allow passing additional class names
 }
 
 export function NumberInputPad({
@@ -21,6 +22,7 @@ export function NumberInputPad({
   currentValue,
   disabled = false,
   isNumberInvalid,
+  className,
 }: NumberInputPadProps) {
   if (disabled && !isNumberInvalid) { // If pad is generally disabled but no specific invalidation logic, show N/A
     return (
@@ -79,6 +81,7 @@ export function NumberInputPad({
   return (
     <div className={cn(
       "w-full flex flex-row flex-nowrap gap-1 p-1 bg-card rounded-md shadow-sm overflow-x-auto",
+      className // Merge the passed className here
     )}>
       {numbers.map((num) => {
         const isInvalidByRule = isNumberInvalid ? isNumberInvalid(num) : false;
