@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -77,11 +78,7 @@ export function NumberInputPad({
 
   return (
     <div className={cn(
-      "grid gap-1 p-1 bg-card rounded-md shadow-sm",
-      numbers.length <= 4 ? "grid-cols-4" :
-      numbers.length <= 8 ? "grid-cols-4" :
-      numbers.length <= 9 ? "grid-cols-3" :
-      "grid-cols-4" 
+      "flex flex-row flex-nowrap gap-1 p-1 bg-card rounded-md shadow-sm overflow-x-auto",
     )}>
       {numbers.map((num) => {
         const isInvalidByRule = isNumberInvalid ? isNumberInvalid(num) : false;
@@ -93,7 +90,7 @@ export function NumberInputPad({
             variant={currentValue === num && !isInvalidByRule ? "default" : "outline"}
             size="sm"
             className={cn(
-              "text-base aspect-square h-9 w-9 sm:h-10 sm:w-10",
+              "text-base aspect-square h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0", // Added flex-shrink-0
               isInvalidByRule && "text-destructive border-destructive/50 hover:text-destructive hover:bg-destructive/10",
               currentValue === num && isInvalidByRule && "bg-destructive/20 text-destructive border-destructive" // If current value is invalid
             )}
