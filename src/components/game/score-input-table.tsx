@@ -184,13 +184,12 @@ export function ScoreInputTable({
       }
       return;
     }
-    
-    if (activePopoverDetails && !activePopoverDetails.isLive) {
+     if (activePopoverDetails && !activePopoverDetails.isLive) {
       return;
     }
-
+    
     const roundConfig = gameRounds.find(r => r.roundNumber === currentRoundForInput);
-    if (!roundConfig && gamePhase === 'SCORING' && currentRoundForInput <= gameRounds.length) { // Added check for valid currentRoundForInput
+    if (!roundConfig && gamePhase === 'SCORING' && currentRoundForInput <= gameRounds.length) { 
       if (activePopoverDetails && activePopoverDetails.isLive) setActivePopoverDetails(null);
       return;
     }
@@ -204,7 +203,7 @@ export function ScoreInputTable({
       const player = allPlayers.find(p => p.id === currentPlayerBiddingId);
       const scoreEntry = playersScoreData.find(psd => psd.playerId === currentPlayerBiddingId)?.scores.find(s => s.roundNumber === currentRoundForInput);
 
-      if (triggerElement && player) {
+      if (triggerElement && player && roundConfig) {
         newLivePopoverDetails = {
           playerId: currentPlayerBiddingId,
           roundNumber: currentRoundForInput,
@@ -241,7 +240,7 @@ export function ScoreInputTable({
       const player = allPlayers.find(p => p.id === currentPlayerTakingId);
       const scoreEntry = playersScoreData.find(psd => psd.playerId === currentPlayerTakingId)?.scores.find(s => s.roundNumber === currentRoundForInput);
       
-      if (triggerElement && player) {
+      if (triggerElement && player && roundConfig) {
         newLivePopoverDetails = {
           playerId: currentPlayerTakingId,
           roundNumber: currentRoundForInput,
@@ -580,23 +579,26 @@ export function ScoreInputTable({
                                     className="cursor-pointer py-0 flex items-center justify-center min-h-[24px] relative text-xs"
                                     onDoubleClick={() => {
                                       if(isActiveForBidding || isActiveForTaking) return; 
-                                      if (inputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) return;
 
-                                      let typeToEdit: 'bid' | 'taken' = 'bid';
+                                      let inputTypeToEdit: 'bid' | 'taken' = 'bid';
+                                      // Logic to determine inputTypeToEdit
                                       if (scoreEntry?.bid === null || (isCurrentDisplayRound && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING')) {
-                                        typeToEdit = 'bid';
+                                        inputTypeToEdit = 'bid';
                                       } else if (scoreEntry?.taken === null || (isCurrentDisplayRound && currentRoundBidsConfirmed && currentRoundInputMode === 'TAKING') || (isCurrentDisplayRound && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null)) {
                                         if(isCurrentDisplayRound && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null) {
-                                             typeToEdit = (scoreEntry?.taken === null && scoreEntry?.bid !== null) ? 'taken' : 'bid';
-                                             if (currentRoundBidsConfirmed) typeToEdit = 'taken';
+                                             inputTypeToEdit = (scoreEntry?.taken === null && scoreEntry?.bid !== null) ? 'taken' : 'bid';
+                                             if (currentRoundBidsConfirmed) inputTypeToEdit = 'taken';
                                         } else {
-                                           typeToEdit = 'taken';
+                                           inputTypeToEdit = 'taken';
                                         }
                                       }
                                       
-                                      const cellRefForDoubleClick = cellRefs.current[typeToEdit === 'bid' ? bidCellKey : takenCellKey];
+                                      // Guard condition that was causing the error, now inputTypeToEdit is defined
+                                      if (inputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) return;
+
+                                      const cellRefForDoubleClick = cellRefs.current[inputTypeToEdit === 'bid' ? bidCellKey : takenCellKey];
                                       if (cellRefForDoubleClick) {
-                                         handleHistoricCellInteraction(player.playerId, roundInfo.roundNumber, typeToEdit, roundInfo.cardsDealt, cellRefForDoubleClick);
+                                         handleHistoricCellInteraction(player.playerId, roundInfo.roundNumber, inputTypeToEdit, roundInfo.cardsDealt, cellRefForDoubleClick);
                                       }
                                     }}
                                   >
@@ -753,7 +755,8 @@ export function ScoreInputTable({
                   className="w-full sm:w-auto text-xs"
                   disabled={ 
                       (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && activePopoverDetails?.isLive && activePopoverDetails.inputType === 'bid' ) ||
-                      (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && activePopoverDetails?.isLive && activePopoverDetails.inputType === 'taken')
+                      (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && activePopoverDetails?.isLive && activePopoverDetails.inputType === 'taken') ||
+                      (activePopoverDetails?.isLive && (activePopoverDetails.inputType === 'CONFIRM_BIDS' || activePopoverDetails.inputType === 'CONFIRM_TAKEN'))
                   }
               >
                   <Flag className="mr-1 h-3 w-3" /> Finish Early
