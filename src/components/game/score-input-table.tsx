@@ -477,7 +477,7 @@ export function ScoreInputTable({
                                       if(isActiveForBidding || isActiveForTaking) return; 
                                       
                                       const isCurrentDisplayRoundForDoubleClick = gamePhase === 'SCORING' && roundInfo.roundNumber === currentRoundForInput;
-                                      let inputTypeToEdit: 'bid' | 'taken' = 'bid'; // Default to 'bid'
+                                      let inputTypeToEdit: 'bid' | 'taken' = 'bid'; 
 
                                       if (scoreEntry?.bid === null || (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING')) {
                                         inputTypeToEdit = 'bid';
@@ -492,8 +492,6 @@ export function ScoreInputTable({
                                       }
                                      
                                       if (inputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) {
-                                        // Cannot edit 'taken' if bids for current round aren't confirmed
-                                        // Allow editing 'bid' instead if 'taken' was targeted but not allowed
                                         inputTypeToEdit = 'bid'; 
                                       }
 
@@ -574,7 +572,7 @@ export function ScoreInputTable({
         <div className="mt-auto p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-3">
             <div className="w-full md:w-auto">
-              <p className="text-sm font-medium text-center md:text-left mb-1 h-5 truncate">
+              <p className="text-sm font-medium text-center md:text-left mb-1 h-5 truncate max-w-[33vw] mx-auto md:mx-0 md:max-w-xs">
                 {numPadActionText || " "}
               </p>
               <NumberInputPad 
@@ -612,11 +610,11 @@ export function ScoreInputTable({
       <Popover
           open={!!activePopoverDetails && !!popoverPosition && !activePopoverDetails.isLive} 
           onOpenChange={(isOpen) => {
-              if (!isOpen) {
-                if (activePopoverDetails && !activePopoverDetails.isLive) { 
-                  setActivePopoverDetails(null);
-                }
+            if (!isOpen) {
+              if (activePopoverDetails && !activePopoverDetails.isLive) {
+                setActivePopoverDetails(null);
               }
+            }
           }}
       >
           <PopoverContent
