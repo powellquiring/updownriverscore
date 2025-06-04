@@ -26,7 +26,7 @@ export function NumberInputPad({
 }: NumberInputPadProps) {
   if (disabled && !isNumberInvalid) { // If pad is generally disabled but no specific invalidation logic, show N/A
     return (
-      <div className="p-2 text-center text-muted-foreground">
+      <div className={cn("p-2 text-center text-muted-foreground", className)}>
         N/A
       </div>
     );
@@ -34,7 +34,7 @@ export function NumberInputPad({
   
   if (max < min && !isNumberInvalid) { // If range is impossible and no specific invalidation
      return (
-      <div className="p-2 text-center text-muted-foreground">
+      <div className={cn("p-2 text-center text-muted-foreground", className)}>
         No valid entries
       </div>
     );
@@ -44,18 +44,16 @@ export function NumberInputPad({
 
   if (numbers.length === 0 && !isNumberInvalid) {
      return (
-      <div className="p-2 text-center text-muted-foreground">
+      <div className={cn("p-2 text-center text-muted-foreground", className)}>
         No valid entries available.
       </div>
     );
   }
   
-  // Check if all numbers are invalid according to the rule
   let allNumbersInvalid = true;
   if (isNumberInvalid && numbers.length > 0) {
     allNumbersInvalid = numbers.every(num => isNumberInvalid(num));
   } else if (numbers.length === 0 && isNumberInvalid) {
-    // This case might occur if min > max initially, but isNumberInvalid could still be relevant for display
     allNumbersInvalid = true; 
   } else {
     allNumbersInvalid = false;
@@ -64,14 +62,14 @@ export function NumberInputPad({
 
   if (allNumbersInvalid && numbers.length > 0) {
      return (
-      <div className="p-2 text-center text-muted-foreground">
+      <div className={cn("p-2 text-center text-muted-foreground", className)}>
         No valid options per rules.
       </div>
     );
   }
   if (allNumbersInvalid && numbers.length === 0 && max < min) {
      return (
-      <div className="p-2 text-center text-muted-foreground">
+      <div className={cn("p-2 text-center text-muted-foreground", className)}>
        No entries possible.
       </div>
     );
@@ -79,37 +77,35 @@ export function NumberInputPad({
 
 
   return (
-    <div className={cn(
-      "flex flex-row flex-nowrap gap-1 p-1 bg-card rounded-md shadow-sm overflow-x-auto", // Removed w-full
-      className // Merge the passed className here (e.g., max-w-[66vw])
-    )}>
-      {numbers.map((num) => {
-        const isInvalidByRule = isNumberInvalid ? isNumberInvalid(num) : false;
-        const effectivelyDisabled = disabled || isInvalidByRule;
+    <div className={cn("overflow-x-auto", className)}>
+      <div className="inline-flex flex-row flex-nowrap gap-1 p-1 bg-card rounded-md shadow-sm">
+        {numbers.map((num) => {
+          const isInvalidByRule = isNumberInvalid ? isNumberInvalid(num) : false;
+          const effectivelyDisabled = disabled || isInvalidByRule;
 
-        return (
-          <Button
-            key={num}
-            variant={currentValue === num && !isInvalidByRule ? "default" : "outline"}
-            size="sm"
-            className={cn(
-              "text-base aspect-square h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0", // Added flex-shrink-0
-              isInvalidByRule && "text-destructive border-destructive/50 hover:text-destructive hover:bg-destructive/10",
-              currentValue === num && isInvalidByRule && "bg-destructive/20 text-destructive border-destructive" // If current value is invalid
-            )}
-            onClick={() => {
-              if (!isInvalidByRule) {
-                onSelectNumber(num);
-              }
-            }}
-            disabled={effectivelyDisabled}
-            aria-disabled={effectivelyDisabled}
-          >
-            {num}
-          </Button>
-        );
-      })}
+          return (
+            <Button
+              key={num}
+              variant={currentValue === num && !isInvalidByRule ? "default" : "outline"}
+              size="sm"
+              className={cn(
+                "text-base aspect-square h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0",
+                isInvalidByRule && "text-destructive border-destructive/50 hover:text-destructive hover:bg-destructive/10",
+                currentValue === num && isInvalidByRule && "bg-destructive/20 text-destructive border-destructive"
+              )}
+              onClick={() => {
+                if (!isInvalidByRule) {
+                  onSelectNumber(num);
+                }
+              }}
+              disabled={effectivelyDisabled}
+              aria-disabled={effectivelyDisabled}
+            >
+              {num}
+            </Button>
+          );
+        })}
+      </div>
     </div>
   );
 }
-
