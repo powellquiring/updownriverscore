@@ -209,6 +209,7 @@ export function ScoreInputTable({
     cardsDealtForRound: number,
     triggerElem: HTMLDivElement
   ) => {
+    
     const isCurrentRoundLiveBidding = roundNumber === currentRoundForInput && gamePhase === 'SCORING' &&
                                      initialInputTypeToEdit === 'bid' && currentRoundInputMode === 'BIDDING' && 
                                      !currentRoundBidsConfirmed && playerId === currentPlayerBiddingId;
@@ -475,21 +476,27 @@ export function ScoreInputTable({
                                     onDoubleClick={() => {
                                       if(isActiveForBidding || isActiveForTaking) return; 
                                       
-                                      let inputTypeToEdit: 'bid' | 'taken' = 'bid';
                                       const isCurrentDisplayRoundForDoubleClick = gamePhase === 'SCORING' && roundInfo.roundNumber === currentRoundForInput;
+                                      let inputTypeToEdit: 'bid' | 'taken' = 'bid'; // Default to 'bid'
 
                                       if (scoreEntry?.bid === null || (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING')) {
                                         inputTypeToEdit = 'bid';
-                                      } else if (scoreEntry?.taken === null || (isCurrentDisplayRoundForDoubleClick && currentRoundBidsConfirmed && currentRoundInputMode === 'TAKING') || (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null)) {
-                                          if(isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null) {
-                                              inputTypeToEdit = (scoreEntry?.taken === null && scoreEntry?.bid !== null) ? 'taken' : 'bid';
-                                              if (currentRoundBidsConfirmed) inputTypeToEdit = 'taken';
-                                          } else {
-                                            inputTypeToEdit = 'taken';
-                                          }
+                                      } else if (scoreEntry?.taken === null || (isCurrentDisplayRoundForDoubleClick && currentRoundBidsConfirmed && currentRoundInputMode === 'TAKING')) {
+                                        inputTypeToEdit = 'taken';
+                                      } else if (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null) {
+                                          // If bids are confirmed for the current round, but we are still in BIDDING mode (meaning editing a historic bid of the current round)
+                                          // and the 'taken' for this cell is null, default to editing 'taken'
+                                          inputTypeToEdit = (scoreEntry?.taken === null) ? 'taken' : 'bid'; 
+                                      } else if (scoreEntry?.taken !== null) { // If taken is not null, prefer editing taken
+                                          inputTypeToEdit = 'taken';
+                                      } else if (scoreEntry?.bid !== null) { // If bid is not null (and taken is null), prefer editing bid
+                                          inputTypeToEdit = 'bid';
                                       }
-                                      
-                                      if (inputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) return;
+                                      // Final check: if we decided on 'taken' but round bids aren't confirmed for CURRENT round, and it IS the current round, switch back to 'bid'
+                                      if (inputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) {
+                                          inputTypeToEdit = 'bid'; // Cannot edit 'taken' if bids for current round aren't confirmed
+                                      }
+
 
                                       const cellRefForDoubleClick = cellRefs.current[inputTypeToEdit === 'bid' ? bidCellKey : takenCellKey];
                                       if (cellRefForDoubleClick) {
@@ -566,7 +573,7 @@ export function ScoreInputTable({
       {gamePhase === 'SCORING' && currentRoundConfig && (
         <div className="mt-auto p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-3">
-            <div className="w-full md:w-auto">
+            <div className="w-full max-w-[66vw] md:w-auto md:max-w-none">
               <p className="text-sm font-medium text-center md:text-left mb-1 h-5 truncate">
                 {numPadActionText || " "}
               </p>
