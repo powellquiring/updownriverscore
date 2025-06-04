@@ -105,7 +105,7 @@ export function ScoreInputTable({
     playerWhosePadIsBeingConfigured: string,        
     isHistoricEditContext: boolean 
   ): ((num_on_pad: number) => boolean) => {
-    if (!roundConfigForCheck || !firstDealerPlayerId || playerOrderForGame.length === 0) { // firstBidderOfRoundId removed as it's complex for historic contexts
+    if (!roundConfigForCheck || !firstDealerPlayerId || playerOrderForGame.length === 0) { 
       return () => false; 
     }
     const cardsDealt = roundConfigForCheck.cardsDealt;
@@ -120,8 +120,7 @@ export function ScoreInputTable({
         return (num_on_pad: number) => num_on_pad < 0 || num_on_pad > cardsDealt;
     }
 
-    // For live input (not historic edit)
-    const actualFirstDeclarerId = firstBidderOfRoundId; // Use firstBidderOfRoundId for live context
+    const actualFirstDeclarerId = firstBidderOfRoundId; 
     const actualDealerId = currentDealerId; 
     if (!actualFirstDeclarerId || !actualDealerId) return () => false;
 
@@ -160,8 +159,6 @@ export function ScoreInputTable({
 
   useEffect(() => {
     if (activePopoverDetails && !activePopoverDetails.isLive) {
-       // This guard prevents the live popover logic from interfering
-       // with an already open historic/cascading edit popover.
       return;
     }
 
@@ -290,13 +287,13 @@ export function ScoreInputTable({
         if (currentPlayerBiddingId) {
             phaseText = `Bidding: ${currentPlayerActiveName}'s turn`;
         } else if (!currentRoundBidsConfirmed) {
-             phaseText = 'All Bids In! Confirm round to proceed.'; 
+             phaseText = 'All Bids In! Click "Enter Tricks" to proceed.'; 
         } 
       } else if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
           if (currentPlayerTakingId) {
             phaseText = `Taking: ${currentPlayerActiveName}'s turn`;
           } else {
-             phaseText = `All Tricks In! Confirm round to proceed.`;
+             phaseText = `All Tricks In! Click button below to proceed.`;
           }
       }
       const dealerInfo = currentDealerName ? `(D: ${currentDealerName})` : '';
@@ -333,16 +330,19 @@ export function ScoreInputTable({
   let numPadPlayerName = "";
   let numPadActionText = "";
   let numPadDisabled = true;
+  let showConfirmBidsButton = false;
+  let showAdvanceRoundButton = false;
 
   if (gamePhase === 'SCORING' && currentRoundConfig) {
-    numPadDisabled = false; 
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId) {
+      numPadDisabled = false;
       const player = playersScoreData.find(p => p.playerId === currentPlayerBiddingId);
       numPadCurrentValue = player?.scores.find(s => s.roundNumber === currentRoundForInput)?.bid ?? null;
       numPadIsInvalidFn = getIsBidInvalid(currentRoundConfig, currentPlayerBiddingId, false);
       numPadPlayerName = allPlayers.find(p => p.id === currentPlayerBiddingId)?.name || "";
       numPadActionText = `Bid: ${numPadPlayerName}`;
     } else if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId) {
+      numPadDisabled = false;
       const player = playersScoreData.find(p => p.playerId === currentPlayerTakingId);
       numPadCurrentValue = player?.scores.find(s => s.roundNumber === currentRoundForInput)?.taken ?? null;
       numPadIsInvalidFn = getIsTakenInvalid(currentRoundConfig, currentPlayerTakingId, false);
@@ -352,8 +352,10 @@ export function ScoreInputTable({
       numPadDisabled = true; 
       if (currentRoundInputMode === 'BIDDING' && !currentPlayerBiddingId && !currentRoundBidsConfirmed) {
         numPadActionText = "Confirm Bids";
+        showConfirmBidsButton = true;
       } else if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) {
         numPadActionText = "Confirm Tricks Taken";
+        showAdvanceRoundButton = true;
       }
     }
   }
@@ -471,9 +473,9 @@ export function ScoreInputTable({
                                     }}
                                     className="cursor-pointer py-0 flex items-center justify-center min-h-[24px] relative text-xs"
                                     onDoubleClick={() => {
-                                      if(isActiveForBidding || isActiveForTaking) return;
+                                      if(isActiveForBidding || isActiveForTaking) return; 
                                       
-                                      let inputTypeToEdit: PopoverInputType = 'bid';
+                                      let inputTypeToEdit: 'bid' | 'taken' = 'bid';
                                       const isCurrentDisplayRoundForDoubleClick = gamePhase === 'SCORING' && roundInfo.roundNumber === currentRoundForInput;
 
                                       if (scoreEntry?.bid === null || (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING')) {
@@ -584,11 +586,11 @@ export function ScoreInputTable({
               />
             </div>
             <div className="w-full flex justify-center md:justify-end items-center pt-2 md:pt-6 md:pl-4">
-              {currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && (
-                <Button onClick={onConfirmBidsForRound} className="w-full md:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">Enter Tricks</Button>
+              {showConfirmBidsButton && (
+                <Button onClick={onConfirmBidsForRound} className="w-auto max-w-[33vw] bg-accent hover:bg-accent/90 text-accent-foreground">Enter Tricks</Button>
               )}
-              {currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && (
-                <Button onClick={onAdvanceRoundOrEndGame} className="w-full md:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">
+              {showAdvanceRoundButton && (
+                <Button onClick={onAdvanceRoundOrEndGame} className="w-auto max-w-[33vw] bg-accent hover:bg-accent/90 text-accent-foreground">
                   {currentRoundForInput < gameRounds.length 
                     ? `Deal ${gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || ''} cards` 
                     : "Show Final Scores"}
@@ -603,7 +605,7 @@ export function ScoreInputTable({
           open={!!activePopoverDetails && !!popoverPosition && !activePopoverDetails.isLive} 
           onOpenChange={(isOpen) => {
               if (!isOpen) {
-                if (activePopoverDetails && !activePopoverDetails.isLive) { // Only close if it's a non-live popover
+                if (activePopoverDetails && !activePopoverDetails.isLive) { 
                   setActivePopoverDetails(null);
                 }
               }
@@ -642,7 +644,7 @@ export function ScoreInputTable({
 
       {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (
         <div className="px-1 md:px-0 mt-2 pb-2 flex flex-col md:flex-row justify-between items-center gap-1 md:gap-2">
-          <Button onClick={onRestartGame} variant="outline" size="sm" className="w-full md:w-auto text-xs">
+          <Button onClick={onRestartGame} variant="outline" size="sm" className="w-auto max-w-[33vw] text-xs">
             <RefreshCw className="mr-1 h-3 w-3" /> {gamePhase === 'RESULTS' ? "Play New Game" : "Restart Game"}
           </Button>
           
@@ -651,7 +653,7 @@ export function ScoreInputTable({
                 onClick={onFinishGame} 
                 variant="destructive" 
                 size="sm" 
-                className="w-full md:w-auto text-xs"
+                className="w-auto max-w-[33vw] text-xs"
                 disabled={ 
                     (currentRoundInputMode === 'BIDDING' && !!currentPlayerBiddingId) ||
                     (currentRoundInputMode === 'TAKING' && !!currentPlayerTakingId && currentRoundBidsConfirmed)
@@ -672,3 +674,4 @@ export function ScoreInputTable({
     </Card>
   );
 }
+
