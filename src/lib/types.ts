@@ -27,20 +27,21 @@ export interface PlayerScoreData {
 export type GamePhase = 'SETUP' | 'DEALER_SELECTION' | 'SCORING' | 'RESULTS';
 export type CurrentRoundInputMode = 'BIDDING' | 'TAKING';
 
-export type PopoverInputType = 'bid' | 'taken' | 'CONFIRM_BIDS' | 'CONFIRM_TAKEN';
+// PopoverInputType is now only for historic/cascading edits.
+export type PopoverInputType = 'bid' | 'taken';
 
 export interface ActivePopoverDetails {
-  playerId: string | null; 
-  roundNumber: number | null; 
+  playerId: string; // PlayerId is required for historic edits
+  roundNumber: number;
   inputType: PopoverInputType;
-  cardsForCell: number | null; 
-  triggerElement: HTMLDivElement | null; 
-  playerName: string | null; 
-  isLive: boolean; // Indicates if the popover is for the live game flow vs. historic edit
+  cardsForCell: number;
+  triggerElement: HTMLDivElement | null;
+  playerName: string;
+  isLive: boolean; // Should generally be false, as live input is now in fixed panel
   currentValue?: number | null;
   isNumberInvalid?: (num: number) => boolean;
   onSelectNumber?: (value: number) => void;
-  onConfirmAction?: () => void; // For CONFIRM_BIDS or CONFIRM_TAKEN popovers
+  // onConfirmAction is removed as confirmations are handled by dedicated buttons
 }
 
 export interface CascadingEditTarget {
@@ -69,10 +70,9 @@ export interface ScoreInputTableProps {
   onSubmitBid: (playerId: string, bid: string) => void;
   onSubmitTaken: (playerId: string, taken: string) => void;
   onConfirmBidsForRound: () => void;
-  onAdvanceRoundOrEndGame: () => void; // New prop
+  onAdvanceRoundOrEndGame: () => void;
   onEditHistoricScore: (playerId: string, roundNumber: number, inputType: 'bid' | 'taken', value: string) => void;
   onFinishGame: () => void;
   onRestartGame: () => void;
   onSelectDealer: (playerId: string) => void;
 }
-
