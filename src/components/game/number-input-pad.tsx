@@ -78,7 +78,7 @@ export function NumberInputPad({
 
   return (
     <div className={cn(
-      "flex flex-row flex-nowrap gap-1 p-1 bg-card rounded-md shadow-sm overflow-x-auto",
+      "w-full flex flex-row flex-nowrap gap-1 p-1 bg-card rounded-md shadow-sm overflow-x-auto",
     )}>
       {numbers.map((num) => {
         const isInvalidByRule = isNumberInvalid ? isNumberInvalid(num) : false;
@@ -109,3 +109,4 @@ export function NumberInputPad({
     </div>
   );
 }
+
