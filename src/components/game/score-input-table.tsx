@@ -378,7 +378,16 @@ export function ScoreInputTable({
       <CardContent className="px-0.5 sm:px-1 md:px-1 py-1 sm:py-2 flex-grow overflow-y-auto">
         <div className="overflow-x-auto" ref={tableWrapperRef}>
           <Table>
-            <TableCaption className="mt-1 mb-1 text-xs">{getTableCaption()}</TableCaption>
+             <TableCaption 
+              className={cn(
+                "mt-1 mb-1",
+                gamePhase === 'DEALER_SELECTION' 
+                  ? "text-xl text-primary-foreground font-semibold"
+                  : "text-xs text-muted-foreground"
+              )}
+            >
+              {getTableCaption()}
+            </TableCaption>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[10px] sm:w-[15px] font-semibold px-0.5 py-0.5 text-xs text-center">{gamePhase === 'DEALER_SELECTION' ? 'Players' : 'R/C'}</TableHead>
@@ -576,7 +585,7 @@ export function ScoreInputTable({
       {gamePhase === 'SCORING' && currentRoundConfig && (
         <div className="mt-auto p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
           <div className="flex flex-row items-center justify-between gap-3">
-            <div className="flex flex-col items-start">
+            <div className="flex flex-col items-start"> {/* Wrapper for text and numpad */}
               <p className="text-sm font-medium text-left mb-1 h-5 truncate max-w-[33vw] md:max-w-xs">
                 {numPadActionText || " "}
               </p>
@@ -593,10 +602,10 @@ export function ScoreInputTable({
                 currentValue={numPadCurrentValue}
                 disabled={numPadDisabled}
                 isNumberInvalid={numPadIsInvalidFn}
-                className="max-w-[66vw] md:max-w-none"
+                className="max-w-[66vw] md:max-w-none" 
               />
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center"> {/* Wrapper for the action button */}
               {showConfirmBidsButton && (
                 <Button onClick={onConfirmBidsForRound} className="w-auto max-w-[33vw] bg-accent hover:bg-accent/90 text-accent-foreground">Enter Tricks</Button>
               )}
