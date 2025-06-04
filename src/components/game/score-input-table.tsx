@@ -219,7 +219,13 @@ export function ScoreInputTable({
     
     if (isCurrentRoundLiveBidding || isCurrentRoundLiveTaking) return; 
 
-    if (initialInputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) return; 
+    const isCurrentDisplayRound = gamePhase === 'SCORING' && roundNumber === currentRoundForInput;
+    let inputTypeToEdit: 'bid' | 'taken' = initialInputTypeToEdit; 
+
+    if (initialInputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) {
+         inputTypeToEdit = 'bid';
+    }
+
 
     const player = allPlayers.find(p => p.id === playerId);
     const scoreEntry = playersScoreData.find(psd => psd.playerId === playerId)?.scores.find(s => s.roundNumber === roundNumber);
@@ -227,20 +233,20 @@ export function ScoreInputTable({
 
     if (player && roundConfigForCell) {
       const onSelectHistoric = (value: number) => {
-        onEditHistoricScore(playerId, roundNumber, initialInputTypeToEdit, value.toString());
+        onEditHistoricScore(playerId, roundNumber, inputTypeToEdit, value.toString());
         setActivePopoverDetails(null); 
       };
 
-      const isInvalidCb = initialInputTypeToEdit === 'bid' 
+      const isInvalidCb = inputTypeToEdit === 'bid' 
         ? getIsBidInvalid(roundConfigForCell, playerId, true) 
         : getIsTakenInvalid(roundConfigForCell, playerId, true);
       
-      const currentVal = initialInputTypeToEdit === 'bid' ? scoreEntry?.bid : scoreEntry?.taken;
+      const currentVal = inputTypeToEdit === 'bid' ? scoreEntry?.bid : scoreEntry?.taken;
 
       setActivePopoverDetails({
         playerId,
         roundNumber,
-        inputType: initialInputTypeToEdit,
+        inputType: inputTypeToEdit,
         cardsForCell: cardsDealtForRound,
         triggerElement: triggerElem,
         playerName: player.name,
@@ -477,28 +483,27 @@ export function ScoreInputTable({
                                       if(isActiveForBidding || isActiveForTaking) return; 
                                       
                                       const isCurrentDisplayRoundForDoubleClick = gamePhase === 'SCORING' && roundInfo.roundNumber === currentRoundForInput;
-                                      let inputTypeToEdit: 'bid' | 'taken' = 'bid'; 
+                                      let determinedInputTypeToEdit: 'bid' | 'taken' = 'bid'; 
 
                                       if (scoreEntry?.bid === null || (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING')) {
-                                        inputTypeToEdit = 'bid';
+                                        determinedInputTypeToEdit = 'bid';
                                       } else if (scoreEntry?.taken === null || (isCurrentDisplayRoundForDoubleClick && currentRoundBidsConfirmed && currentRoundInputMode === 'TAKING')) {
-                                        inputTypeToEdit = 'taken';
+                                        determinedInputTypeToEdit = 'taken';
                                       } else if (isCurrentDisplayRoundForDoubleClick && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && scoreEntry?.bid !== null) {
-                                          inputTypeToEdit = (scoreEntry?.taken === null) ? 'taken' : 'bid'; 
+                                          determinedInputTypeToEdit = (scoreEntry?.taken === null) ? 'taken' : 'bid'; 
                                       } else if (scoreEntry?.taken !== null) { 
-                                          inputTypeToEdit = 'taken';
+                                          determinedInputTypeToEdit = 'taken';
                                       } else if (scoreEntry?.bid !== null) { 
-                                          inputTypeToEdit = 'bid';
+                                          determinedInputTypeToEdit = 'bid';
                                       }
                                      
-                                      if (inputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) {
-                                         inputTypeToEdit = 'bid';
+                                      if (determinedInputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundInfo.roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) {
+                                         determinedInputTypeToEdit = 'bid';
                                       }
 
-
-                                      const cellRefForDoubleClick = cellRefs.current[inputTypeToEdit === 'bid' ? bidCellKey : takenCellKey];
+                                      const cellRefForDoubleClick = cellRefs.current[determinedInputTypeToEdit === 'bid' ? bidCellKey : takenCellKey];
                                       if (cellRefForDoubleClick) {
-                                         handleHistoricCellInteraction(player.playerId, roundInfo.roundNumber, inputTypeToEdit, roundInfo.cardsDealt, cellRefForDoubleClick);
+                                         handleHistoricCellInteraction(player.playerId, roundInfo.roundNumber, determinedInputTypeToEdit, roundInfo.cardsDealt, cellRefForDoubleClick);
                                       }
                                     }}
                                   >
@@ -649,7 +654,7 @@ export function ScoreInputTable({
       </Popover>
 
       {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (
-        <div className="px-1 md:px-0 mt-2 pb-2 flex flex-col md:flex-row justify-between items-center gap-1 md:gap-2">
+        <div className="px-1 md:px-0 mt-2 pb-2 flex flex-row justify-between items-center gap-1 md:gap-2">
           <Button onClick={onRestartGame} variant="outline" size="sm" className="w-auto max-w-[33vw] text-xs">
             <RefreshCw className="mr-1 h-3 w-3" /> {gamePhase === 'RESULTS' ? "Play New Game" : "Restart Game"}
           </Button>
