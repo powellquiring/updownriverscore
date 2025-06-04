@@ -219,7 +219,7 @@ export function ScoreInputTable({
     
     if (isCurrentRoundLiveBidding || isCurrentRoundLiveTaking) return; 
 
-    const isCurrentDisplayRound = gamePhase === 'SCORING' && roundNumber === currentRoundForInput;
+    const isCurrentDisplayRoundForDoubleClick = gamePhase === 'SCORING' && roundNumber === currentRoundForInput;
     let inputTypeToEdit: 'bid' | 'taken' = initialInputTypeToEdit; 
 
     if (initialInputTypeToEdit === 'taken' && currentRoundInputMode === 'BIDDING' && roundNumber === currentRoundForInput && !currentRoundBidsConfirmed) {
@@ -575,8 +575,8 @@ export function ScoreInputTable({
 
       {gamePhase === 'SCORING' && currentRoundConfig && (
         <div className="mt-auto p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
-          <div className="flex flex-col md:flex-row items-center gap-3">
-            <div className="w-full md:w-auto">
+          <div className="flex flex-row items-center justify-between gap-3">
+            <div className="flex flex-col items-start">
               <p className="text-sm font-medium text-left mb-1 h-5 truncate max-w-[33vw] md:max-w-xs">
                 {numPadActionText || " "}
               </p>
@@ -596,7 +596,7 @@ export function ScoreInputTable({
                 className="max-w-[66vw] md:max-w-none"
               />
             </div>
-            <div className="w-full flex justify-center md:justify-end items-center md:pl-4">
+            <div className="flex items-center">
               {showConfirmBidsButton && (
                 <Button onClick={onConfirmBidsForRound} className="w-auto max-w-[33vw] bg-accent hover:bg-accent/90 text-accent-foreground">Enter Tricks</Button>
               )}
