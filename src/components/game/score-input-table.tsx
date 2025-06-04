@@ -357,15 +357,15 @@ export function ScoreInputTable({
       numPadActionText = `Taken: ${numPadPlayerName}`;
     } else if (currentRoundInputMode === 'BIDDING' && !currentPlayerBiddingId && !currentRoundBidsConfirmed) { // All bids in, ready to confirm for tricks
         showConfirmBidsButton = true;
-        numPadActionText = ""; // No action text needed if button is shown
+        numPadActionText = ""; 
         numPadDisabled = true;
     } else if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) { // All takes in, ready to advance/end
         showAdvanceRoundButton = true;
-        numPadActionText = ""; // No action text needed if button is shown
+        numPadActionText = ""; 
         numPadDisabled = true;
-    } else { // Default disabled state if none of the above
+    } else { 
         numPadDisabled = true;
-        numPadActionText = " "; // Placeholder to maintain height
+        numPadActionText = " "; 
     }
   }
 
@@ -586,8 +586,7 @@ export function ScoreInputTable({
 
       {gamePhase === 'SCORING' && currentRoundConfig && (
         <div className="mt-auto p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
-          <div className={`flex flex-row items-center ${ (showConfirmBidsButton || showAdvanceRoundButton) ? 'justify-center' : 'justify-between' } gap-3`}>
-            {/* This group holds either buttons OR (text + numpad) */}
+          <div className="flex flex-row items-center justify-start gap-3">
             <div className={`flex ${ (showConfirmBidsButton || showAdvanceRoundButton) ? 'items-center' : 'flex-col items-start' }`}>
               {showConfirmBidsButton ? (
                 <Button onClick={onConfirmBidsForRound} className="w-auto max-w-[45vw] bg-accent hover:bg-accent/90 text-accent-foreground px-4 py-2 text-sm">
@@ -622,7 +621,6 @@ export function ScoreInputTable({
                 </>
               )}
             </div>
-            {/* The original right-side div for buttons is intentionally omitted here as buttons are now part of the conditional logic above */}
           </div>
         </div>
       )}
@@ -700,3 +698,4 @@ export function ScoreInputTable({
     </Card>
   );
 }
+
