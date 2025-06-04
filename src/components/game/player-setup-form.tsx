@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { PlusCircle, UserMinus, Users, Settings, Gamepad2 } from 'lucide-react';
 import type { Player } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
+// import { useToast } from '@/hooks/use-toast'; // Removed
 
 interface PlayerSetupFormProps {
   players: Player[];
@@ -20,7 +20,7 @@ interface PlayerSetupFormProps {
 export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartGame }: PlayerSetupFormProps) {
   const [playerName, setPlayerName] = useState('');
   const [maxCardsInHand, setMaxCardsInHand] = useState('2'); // Default to 2
-  const { toast } = useToast();
+  // const { toast } = useToast(); // Removed
   const startGameButtonRef = useRef<HTMLButtonElement>(null);
   const maxCardsInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,11 +52,13 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
   const handleAddPlayerFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (playerName.trim() === '') {
-      toast({ title: "Player name cannot be empty.", variant: "destructive" });
+      // toast({ title: "Player name cannot be empty.", variant: "destructive" }); // Removed
+      console.warn("Player name cannot be empty.");
       return;
     }
     if (players.length >= 7) { 
-        toast({ title: "Maximum of 7 players allowed.", variant: "destructive" });
+        // toast({ title: "Maximum of 7 players allowed.", variant: "destructive" }); // Removed
+        console.warn("Maximum of 7 players allowed.");
         return;
     }
     onAddPlayer(playerName.trim());
@@ -66,11 +68,13 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
   const handleInitiateGame = () => {
     const numMaxCards = parseInt(maxCardsInHand, 10);
     if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) {
-      toast({ title: "Invalid Max Cards", description: "Max cards per hand must be a number between 1 and 7.", variant: "destructive" });
+      // toast({ title: "Invalid Max Cards", description: "Max cards per hand must be a number between 1 and 7.", variant: "destructive" }); // Removed
+      console.warn("Invalid Max Cards. Max cards per hand must be a number between 1 and 7.");
       return;
     }
     if (players.length < 2) {
-      toast({ title: "Need at least 2 players to start.", variant: "destructive" });
+      // toast({ title: "Need at least 2 players to start.", variant: "destructive" }); // Removed
+      console.warn("Need at least 2 players to start.");
       return;
     }
     onStartGame(numMaxCards);

@@ -6,7 +6,7 @@ import type { Player, GameRoundInfo, PlayerScoreData, RoundScoreEntry, GamePhase
 import { PlayerSetupForm } from './player-setup-form';
 import { ScoreInputTable } from './score-input-table';
 // import { ResultsDisplay } from './results-display'; // No longer needed
-import { useToast } from '@/hooks/use-toast';
+// import { useToast } from '@/hooks/use-toast'; // Removed
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 // Helper function to generate rounds configuration
@@ -61,7 +61,7 @@ export function GameManager() {
   const [cascadingEditTarget, setCascadingEditTarget] = useState<CascadingEditTarget | null>(null);
 
 
-  const { toast } = useToast();
+  // const { toast } = useToast(); // Removed
   
   const handlePlayAgain = useCallback(() => {
     setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
@@ -159,12 +159,14 @@ export function GameManager() {
 
   const handleStartGame = useCallback((maxCardsDealtByUser: number) => {
     if (players.length < 2) {
-      toast({ title: "Not enough players", description: "You need at least 2 players to start.", variant: "destructive" });
+      // toast({ title: "Not enough players", description: "You need at least 2 players to start.", variant: "destructive" }); // Removed
+      console.warn("Not enough players. You need at least 2 players to start.");
       return;
     }
     const roundsConfig = generateGameRounds(players.length, maxCardsDealtByUser);
     if (roundsConfig.length === 0) {
-        toast({ title: "Game Configuration Error", description: "Could not generate rounds.", variant: "destructive"});
+        // toast({ title: "Game Configuration Error", description: "Could not generate rounds.", variant: "destructive"}); // Removed
+        console.warn("Game Configuration Error: Could not generate rounds.");
         setGamePhase('SETUP'); return;
     }
     setGameRounds(roundsConfig);
@@ -186,19 +188,22 @@ export function GameManager() {
     setCurrentRoundInputMode('BIDDING');
     setCascadingEditTarget(null);
     setGamePhase('DEALER_SELECTION');
-    toast({ title: "Game Ready!", description: `Please select the dealer for the first round.` });
-  }, [players, toast]);
+    // toast({ title: "Game Ready!", description: `Please select the dealer for the first round.` }); // Removed
+    console.log("Game Ready! Please select the dealer for the first round.");
+  }, [players]);
 
   const handleSelectDealer = useCallback((playerId: string) => {
     setFirstDealerPlayerId(playerId); setCurrentDealerId(playerId);
     const order = playerOrderForGame.length > 0 ? playerOrderForGame : players.map(p => p.id);
     if (order.length === 0) {
-        toast({title: "Error", description: "Player order not set.", variant: "destructive"});
+        // toast({title: "Error", description: "Player order not set.", variant: "destructive"}); // Removed
+        console.error("Error: Player order not set.");
         setGamePhase('SETUP'); return;
     }
     const dealerIndex = order.indexOf(playerId);
     if (dealerIndex === -1) {
-        toast({title: "Error", description: "Dealer not found.", variant: "destructive"});
+        // toast({title: "Error", description: "Dealer not found.", variant: "destructive"}); // Removed
+        console.error("Error: Dealer not found.");
         setGamePhase('SETUP'); return;
     }
     const firstBidder = order[(dealerIndex + 1) % order.length];
@@ -208,23 +213,28 @@ export function GameManager() {
     setCurrentRoundInputMode('BIDDING'); 
     setCascadingEditTarget(null);
     setGamePhase('SCORING');
-    const dealerName = players.find(p => p.id === playerId)?.name || 'Selected';
-    const firstBidderName = players.find(p => p.id === firstBidder)?.name || 'Next';
-    const currentRoundInfo = gameRounds.find(r => r.roundNumber === 1);
-    const cardsDealt = currentRoundInfo ? currentRoundInfo.cardsDealt : 'N/A';
-    toast({ title: "Dealer Selected", description: `${dealerName} is dealer. Round 1 (${cardsDealt} cards). ${firstBidderName} to bid.` });
-  }, [players, gameRounds, toast, playerOrderForGame]);
+    // const dealerName = players.find(p => p.id === playerId)?.name || 'Selected'; // Removed for toast
+    // const firstBidderName = players.find(p => p.id === firstBidder)?.name || 'Next'; // Removed for toast
+    // const currentRoundInfo = gameRounds.find(r => r.roundNumber === 1); // Removed for toast
+    // const cardsDealt = currentRoundInfo ? currentRoundInfo.cardsDealt : 'N/A'; // Removed for toast
+    // toast({ title: "Dealer Selected", description: `${dealerName} is dealer. Round 1 (${cardsDealt} cards). ${firstBidderName} to bid.` }); // Removed
+    console.log("Dealer Selected. Bidding for Round 1 begins.");
+  }, [players, playerOrderForGame]);
 
   const handleSubmitBid = useCallback((playerId: string, bidStr: string) => {
     if (playerId !== currentPlayerBiddingId) {
-        toast({title: "Not your turn", description: "Wait for your turn to bid.", variant: "destructive"}); return;
+        // toast({title: "Not your turn", description: "Wait for your turn to bid.", variant: "destructive"}); // Removed
+        console.warn("Not your turn to bid.");
+        return;
     }
     const bid = parseInt(bidStr, 10);
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
     const currentRoundCards = currentRoundInfo?.cardsDealt;
 
     if (isNaN(bid) || bid < 0 || (currentRoundCards !== undefined && bid > currentRoundCards)) {
-        toast({title: "Invalid Bid", description: `Bid must be 0 to ${currentRoundCards ?? 'max'}.`, variant: "destructive"}); return;
+        // toast({title: "Invalid Bid", description: `Bid must be 0 to ${currentRoundCards ?? 'max'}.`, variant: "destructive"}); // Removed
+        console.warn(`Invalid Bid. Bid must be 0 to ${currentRoundCards ?? 'max'}.`);
+        return;
     }
 
     if (playerId === currentDealerId && currentRoundCards !== undefined) {
@@ -237,11 +247,12 @@ export function GameManager() {
         }, 0);
 
         if (sumOfOtherPlayerBids + bid === currentRoundCards) {
-            toast({
-                title: "Invalid Bid for Dealer",
-                description: `Total bids (${sumOfOtherPlayerBids + bid}) cannot equal cards dealt (${currentRoundCards}). Please choose another bid.`,
-                variant: "destructive",
-            });
+            // toast({ // Removed
+            //     title: "Invalid Bid for Dealer",
+            //     description: `Total bids (${sumOfOtherPlayerBids + bid}) cannot equal cards dealt (${currentRoundCards}). Please choose another bid.`,
+            //     variant: "destructive",
+            // });
+            console.warn(`Invalid Bid for Dealer. Total bids (${sumOfOtherPlayerBids + bid}) cannot equal cards dealt (${currentRoundCards}). Please choose another bid.`);
             return; 
         }
     }
@@ -264,26 +275,27 @@ export function GameManager() {
     if (nextBidderId === firstBidderOfRoundId) { 
         setCurrentPlayerBiddingId(null); 
         setCascadingEditTarget(null);
-        toast({ title: "All Bids In!", description: `All bids submitted for Round ${currentRoundForInput}. Click 'Enter Tricks' to proceed.` });
+        // toast({ title: "All Bids In!", description: `All bids submitted for Round ${currentRoundForInput}. Click 'Enter Tricks' to proceed.` }); // Removed
+        console.log(`All bids submitted for Round ${currentRoundForInput}. Click 'Enter Tricks' to proceed.`);
     } else {
         setCurrentPlayerBiddingId(nextBidderId);
-        // const nextBidderName = players.find(p => p.id === nextBidderId)?.name || 'Next Player';
-        // toast({ title: "Bid Submitted", description: `${nextBidderName}, your turn to bid.` });
     }
-  }, [currentPlayerBiddingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, players, toast, playersScoreData, currentDealerId]);
+  }, [currentPlayerBiddingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, playersScoreData, currentDealerId]);
 
   const handleConfirmBidsForRound = useCallback(() => {
     if (currentPlayerBiddingId !== null || currentRoundBidsConfirmed) {
-      toast({ title: "Action not allowed", description: "Cannot confirm bids at this time.", variant: "destructive" });
+      // toast({ title: "Action not allowed", description: "Cannot confirm bids at this time.", variant: "destructive" }); // Removed
+      console.warn("Cannot confirm bids at this time.");
       return;
     }
     setCurrentRoundBidsConfirmed(true);
     setCurrentRoundInputMode('TAKING');
     setCurrentPlayerTakingId(firstBidderOfRoundId); 
     setCascadingEditTarget(null);
-    const firstTakerName = players.find(p=> p.id === firstBidderOfRoundId)?.name || 'First Player';
-    toast({ title: "Bids Confirmed!", description: `Now enter tricks taken. ${firstTakerName} to start.` });
-  }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId, players, toast]);
+    // const firstTakerName = players.find(p=> p.id === firstBidderOfRoundId)?.name || 'First Player'; // Removed for toast
+    // toast({ title: "Bids Confirmed!", description: `Now enter tricks taken. ${firstTakerName} to start.` }); // Removed
+    console.log("Bids Confirmed! Now enter tricks taken.");
+  }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId]);
 
 
   const handleAdvanceRoundOrEndGame = useCallback(() => {
@@ -304,10 +316,11 @@ export function GameManager() {
       setCurrentRoundInputMode('BIDDING');
       setCurrentRoundBidsConfirmed(false); 
       
-      const dealerName = players.find(p => p.id === newDealerId)?.name || 'New Dealer';
-      const firstBidderName = players.find(p => p.id === newFirstBidderId)?.name || 'Next';
-      const cardsForNewRound = gameRounds.find(r => r.roundNumber === newRoundNumber)?.cardsDealt;
-      toast({ title: `Starting Round ${newRoundNumber}`, description: `${dealerName} is dealer. Dealing ${cardsForNewRound} cards. ${firstBidderName} to bid.`});
+      // const dealerName = players.find(p => p.id === newDealerId)?.name || 'New Dealer'; // Removed for toast
+      // const firstBidderName = players.find(p => p.id === newFirstBidderId)?.name || 'Next'; // Removed for toast
+      // const cardsForNewRound = gameRounds.find(r => r.roundNumber === newRoundNumber)?.cardsDealt; // Removed for toast
+      // toast({ title: `Starting Round ${newRoundNumber}`, description: `${dealerName} is dealer. Dealing ${cardsForNewRound} cards. ${firstBidderName} to bid.`}); // Removed
+      console.log(`Starting Round ${newRoundNumber}.`);
     } else { 
       setGamePhase('RESULTS');
       setCurrentPlayerBiddingId(null);
@@ -315,21 +328,25 @@ export function GameManager() {
       setCurrentRoundInputMode('BIDDING'); 
       setCurrentRoundBidsConfirmed(false);
       setCascadingEditTarget(null);
-      toast({ title: "Game Finished!", description: "All rounds completed. Final scores are displayed below." });
+      // toast({ title: "Game Finished!", description: "All rounds completed. Final scores are displayed below." }); // Removed
+      console.log("Game Finished! All rounds completed. Final scores are displayed below.");
     }
-  }, [currentRoundForInput, gameRounds, playerOrderForGame, currentDealerId, players, toast]);
+  }, [currentRoundForInput, gameRounds, playerOrderForGame, currentDealerId]);
 
 
   const handleSubmitTaken = useCallback((playerId: string, takenStr: string) => {
     if (playerId !== currentPlayerTakingId || !currentRoundBidsConfirmed) {
-        toast({title: "Not your turn or bids not confirmed", description: "Wait for your turn or confirm bids.", variant: "destructive"}); return;
+        // toast({title: "Not your turn or bids not confirmed", description: "Wait for your turn or confirm bids.", variant: "destructive"}); // Removed
+        console.warn("Not your turn or bids not confirmed.");
+        return;
     }
     const taken = parseInt(takenStr, 10);
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
     const cardsInCurrentRound = currentRoundInfo?.cardsDealt;
 
     if (isNaN(taken) || taken < 0 || (cardsInCurrentRound !== undefined && taken > cardsInCurrentRound)) {
-      toast({ title: "Invalid Taken", description: `Tricks taken must be 0 to ${cardsInCurrentRound}.`, variant: "destructive"});
+      // toast({ title: "Invalid Taken", description: `Tricks taken must be 0 to ${cardsInCurrentRound}.`, variant: "destructive"}); // Removed
+      console.warn(`Invalid Taken. Tricks taken must be 0 to ${cardsInCurrentRound}.`);
       return;
     }
     
@@ -349,11 +366,13 @@ export function GameManager() {
 
 
     if (isLastPlayerToTake && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound !== cardsInCurrentRound) {
-        toast({ title: "Invalid Total Taken", description: `Total tricks taken (${currentSumOfTakenThisRound}) must equal cards dealt (${cardsInCurrentRound}). Adjust last player's entry.`, variant: "destructive"});
+        // toast({ title: "Invalid Total Taken", description: `Total tricks taken (${currentSumOfTakenThisRound}) must equal cards dealt (${cardsInCurrentRound}). Adjust last player's entry.`, variant: "destructive"}); // Removed
+        console.warn(`Invalid Total Taken. Total tricks taken (${currentSumOfTakenThisRound}) must equal cards dealt (${cardsInCurrentRound}). Adjust last player's entry.`);
         return; 
     }
     if (!isLastPlayerToTake && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound > cardsInCurrentRound) {
-         toast({ title: "Invalid Taken Count", description: `Total tricks taken so far (${currentSumOfTakenThisRound}) exceeds cards dealt (${cardsInCurrentRound}).`, variant: "destructive"});
+         // toast({ title: "Invalid Taken Count", description: `Total tricks taken so far (${currentSumOfTakenThisRound}) exceeds cards dealt (${cardsInCurrentRound}).`, variant: "destructive"}); // Removed
+         console.warn(`Invalid Taken Count. Total tricks taken so far (${currentSumOfTakenThisRound}) exceeds cards dealt (${cardsInCurrentRound}).`);
          return;
     }
     
@@ -379,16 +398,15 @@ export function GameManager() {
 
     if (isLastPlayerToTake) { 
         setCurrentPlayerTakingId(null); 
-        const playerNameWhoTook = players.find(p => p.id === playerId)?.name || "Player";
-        toast({ title: "Tricks Taken Submitted", description: `Tricks taken by ${playerNameWhoTook} submitted. All tricks for Round ${currentRoundForInput} recorded.` });
+        // const playerNameWhoTook = players.find(p => p.id === playerId)?.name || "Player"; // Removed for toast
+        // toast({ title: "Tricks Taken Submitted", description: `Tricks taken by ${playerNameWhoTook} submitted. All tricks for Round ${currentRoundForInput} recorded.` }); // Removed
+        console.log(`Tricks taken submitted. All tricks for Round ${currentRoundForInput} recorded.`);
     } else {
         setCurrentPlayerTakingId(nextTakerId);
-        // const nextTakerName = players.find(p => p.id === nextTakerId)?.name || 'Next Player';
-        // toast({ title: "Tricks Taken Submitted", description: `${nextTakerName}, your turn to enter tricks taken.` });
     }
   }, [
     currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, 
-    playerOrderForGame, firstBidderOfRoundId, players, toast, playersScoreData
+    playerOrderForGame, firstBidderOfRoundId, playersScoreData
   ]);
 
   const handleEditHistoricScore = useCallback((
@@ -400,13 +418,19 @@ export function GameManager() {
     const isCurrentRound = roundNumber === currentRoundForInput;
     if (isCurrentRound) {
         if (inputType === 'bid' && playerId === currentPlayerBiddingId && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed) {
-             toast({ title: "Cannot Edit Active Bid", description: "Submit bid through normal flow.", variant: "destructive"}); return;
+             // toast({ title: "Cannot Edit Active Bid", description: "Submit bid through normal flow.", variant: "destructive"}); // Removed
+             console.warn("Cannot Edit Active Bid. Submit bid through normal flow.");
+             return;
         }
         if (inputType === 'taken' && playerId === currentPlayerTakingId && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
-            toast({ title: "Cannot Edit Active Take", description: "Submit tricks taken through normal flow.", variant: "destructive"}); return;
+            // toast({ title: "Cannot Edit Active Take", description: "Submit tricks taken through normal flow.", variant: "destructive"}); // Removed
+            console.warn("Cannot Edit Active Take. Submit tricks taken through normal flow.");
+            return;
         }
         if (inputType === 'taken' && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING') { 
-             toast({ title: "Cannot Edit Takes Yet", description: "Confirm bids for the round first.", variant: "destructive"}); return;
+             // toast({ title: "Cannot Edit Takes Yet", description: "Confirm bids for the round first.", variant: "destructive"}); // Removed
+             console.warn("Cannot Edit Takes Yet. Confirm bids for the round first.");
+             return;
         }
     }
 
@@ -415,7 +439,8 @@ export function GameManager() {
     const cardsForRound = roundConfig?.cardsDealt;
 
     if (isNaN(value) || value < 0 || (cardsForRound !== undefined && value > cardsForRound)) {
-      toast({ title: "Invalid Edit", description: `Entry must be between 0 and ${cardsForRound ?? 'max'}.`, variant: "destructive" });
+      // toast({ title: "Invalid Edit", description: `Entry must be between 0 and ${cardsForRound ?? 'max'}.`, variant: "destructive" }); // Removed
+      console.warn(`Invalid Edit. Entry must be between 0 and ${cardsForRound ?? 'max'}.`);
       return;
     }
     
@@ -452,7 +477,8 @@ export function GameManager() {
         const firstDealerIndex = order.indexOf(firstDealerPlayerId);
         if (firstDealerIndex === -1) {
             setCascadingEditTarget(null);
-            toast({ title: "Error", description: "First dealer not found for cascade logic.", variant: "destructive"});
+            // toast({ title: "Error", description: "First dealer not found for cascade logic.", variant: "destructive"}); // Removed
+            console.error("Error: First dealer not found for cascade logic.");
             return;
         }
 
@@ -527,23 +553,32 @@ export function GameManager() {
       setCascadingEditTarget(null); 
     }
 
-    const playerName = players.find(p => p.id === playerId)?.name || 'Player';
-    toast({ title: "Score Corrected", description: `${inputType === 'bid' ? 'Bid' : 'Tricks taken'} for ${playerName} in round ${roundNumber} updated to ${value}.` });
-  }, [gameRounds, players, toast, currentRoundForInput, currentPlayerBiddingId, currentPlayerTakingId, currentRoundInputMode, currentRoundBidsConfirmed, playerOrderForGame, firstDealerPlayerId]);
+    // const playerName = players.find(p => p.id === playerId)?.name || 'Player'; // Removed for toast
+    // toast({ title: "Score Corrected", description: `${inputType === 'bid' ? 'Bid' : 'Tricks taken'} for ${playerName} in round ${roundNumber} updated to ${value}.` }); // Removed
+    console.log(`Score Corrected for round ${roundNumber}.`);
+  }, [gameRounds, players, currentRoundForInput, currentPlayerBiddingId, currentPlayerTakingId, currentRoundInputMode, currentRoundBidsConfirmed, playerOrderForGame, firstDealerPlayerId]);
 
 
   const handleFinishGameEarly = useCallback(() => {
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && gamePhase === 'SCORING') {
-         toast({ title: "Complete Round Bidding", description: "Complete bidding for the current player first.", variant: "destructive" }); return;
+         // toast({ title: "Complete Round Bidding", description: "Complete bidding for the current player first.", variant: "destructive" }); // Removed
+         console.warn("Complete bidding for the current player first.");
+         return;
     }
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && gamePhase === 'SCORING') {
-      toast({ title: "Confirm Bids", description: "Please confirm bids for the current round first.", variant: "destructive" }); return;
+      // toast({ title: "Confirm Bids", description: "Please confirm bids for the current round first.", variant: "destructive" }); // Removed
+      console.warn("Please confirm bids for the current round first.");
+      return;
     }
     if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
-        toast({ title: "Taking in Progress", description: "Complete tricks taken entries for the current player first.", variant: "destructive"}); return;
+        // toast({ title: "Taking in Progress", description: "Complete tricks taken entries for the current player first.", variant: "destructive"}); // Removed
+        console.warn("Complete tricks taken entries for the current player first.");
+        return;
     }
      if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
-        toast({ title: "Confirm Round Completion", description: "Please confirm completion of the current round's tricks first.", variant: "destructive"}); return;
+        // toast({ title: "Confirm Round Completion", description: "Please confirm completion of the current round's tricks first.", variant: "destructive"}); // Removed
+        console.warn("Please confirm completion of the current round's tricks first.");
+        return;
     }
     
     setGamePhase('RESULTS');
@@ -552,8 +587,9 @@ export function GameManager() {
     setCurrentRoundInputMode('BIDDING');
     setCurrentRoundBidsConfirmed(false);
     setCascadingEditTarget(null);
-    toast({ title: "Game Finished Early!", description: "Displaying current scores." });
-  }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, toast, gamePhase]);
+    // toast({ title: "Game Finished Early!", description: "Displaying current scores." }); // Removed
+    console.log("Game Finished Early! Displaying current scores.");
+  }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, gamePhase]);
 
   const handleCascadedEditOpened = useCallback(() => {
     setCascadingEditTarget(null);

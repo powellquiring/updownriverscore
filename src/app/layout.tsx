@@ -1,6 +1,7 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
-import { Toaster } from "@/components/ui/toaster";
+// import { Toaster } from "@/components/ui/toaster"; // Removed
 
 export const metadata: Metadata = {
   title: 'UpDown River Scorer',
@@ -21,7 +22,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col">
         {children}
-        <Toaster />
+        {/* <Toaster /> */} {/* Removed */}
       </body>
     </html>
   );
