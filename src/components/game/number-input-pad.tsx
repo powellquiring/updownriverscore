@@ -80,8 +80,8 @@ export function NumberInputPad({
 
   return (
     <div className={cn(
-      "w-full flex flex-row flex-nowrap gap-1 p-1 bg-card rounded-md shadow-sm overflow-x-auto",
-      className // Merge the passed className here
+      "flex flex-row flex-nowrap gap-1 p-1 bg-card rounded-md shadow-sm overflow-x-auto", // Removed w-full
+      className // Merge the passed className here (e.g., max-w-[66vw])
     )}>
       {numbers.map((num) => {
         const isInvalidByRule = isNumberInvalid ? isNumberInvalid(num) : false;
