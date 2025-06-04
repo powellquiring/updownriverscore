@@ -267,8 +267,8 @@ export function GameManager() {
         toast({ title: "All Bids In!", description: `All bids submitted for Round ${currentRoundForInput}. Click 'Enter Tricks' to proceed.` });
     } else {
         setCurrentPlayerBiddingId(nextBidderId);
-        const nextBidderName = players.find(p => p.id === nextBidderId)?.name || 'Next Player';
-        toast({ title: "Bid Submitted", description: `${nextBidderName}, your turn to bid.` });
+        // const nextBidderName = players.find(p => p.id === nextBidderId)?.name || 'Next Player';
+        // toast({ title: "Bid Submitted", description: `${nextBidderName}, your turn to bid.` });
     }
   }, [currentPlayerBiddingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, players, toast, playersScoreData, currentDealerId]);
 
@@ -380,12 +380,11 @@ export function GameManager() {
     if (isLastPlayerToTake) { 
         setCurrentPlayerTakingId(null); 
         const playerNameWhoTook = players.find(p => p.id === playerId)?.name || "Player";
-        toast({ title: "Tricks Taken Submitted", description: `Tricks taken by ${playerNameWhoTook} submitted. All tricks for Round ${currentRoundForInput} recorded. Click 'Start Next Round' or 'Show Final Scores'.` });
-        // Advancing to next round or results is now handled by onAdvanceRoundOrEndGame, triggered by ScoreInputTable
+        toast({ title: "Tricks Taken Submitted", description: `Tricks taken by ${playerNameWhoTook} submitted. All tricks for Round ${currentRoundForInput} recorded.` });
     } else {
         setCurrentPlayerTakingId(nextTakerId);
-        const nextTakerName = players.find(p => p.id === nextTakerId)?.name || 'Next Player';
-        toast({ title: "Tricks Taken Submitted", description: `${nextTakerName}, your turn to enter tricks taken.` });
+        // const nextTakerName = players.find(p => p.id === nextTakerId)?.name || 'Next Player';
+        // toast({ title: "Tricks Taken Submitted", description: `${nextTakerName}, your turn to enter tricks taken.` });
     }
   }, [
     currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, 
