@@ -87,7 +87,6 @@ export function ScoreInputTable({
     const roundNumForCheck = roundConfigForCheck.roundNumber;
     const dealerForThisRound = currentDealerId;
 
-    // For the dealer: their num_on_pad must make the total tricks taken by ALL players equal cardsDealt.
     if (playerWhosePadIsBeingConfigured === dealerForThisRound) {
         let sumOfTakenByAllOtherPlayers = 0;
         playersScoreData.forEach(pData => {
@@ -103,40 +102,31 @@ export function ScoreInputTable({
     }
 
     // For non-dealer players:
-    // The sum of tricks taken by players who have already entered their 'taken' value in this round's sequence,
-    // plus the current player's potential input, must not exceed cardsDealt.
     return (num_on_pad: number) => {
         if (num_on_pad < 0 || num_on_pad > cardsDealt) return true;
 
         let sumOfTakenByPrecedingPlayersInTurnOrder = 0;
         const order = playerOrderForGame;
-        let tempPlayerIndex = order.indexOf(firstBidderOfRoundId); // firstBidderOfRoundId is checked for null above
+        const startIndex = order.indexOf(firstBidderOfRoundId);
 
-        // Iterate through players in turn order for 'taken'
-        // until we reach the playerWhosePadIsBeingConfigured
+        if (startIndex === -1) { 
+            console.error("getIsTakenInvalid: firstBidderOfRoundId not found in playerOrderForGame for non-dealer validation.");
+            return true; // Fail safe
+        }
+
         for (let i = 0; i < order.length; i++) {
-            const currentPlayerInLoopId = order[tempPlayerIndex];
+            const currentIndexInOrder = (startIndex + i) % order.length;
+            const currentPlayerInSequenceId = order[currentIndexInOrder];
 
-            if (currentPlayerInLoopId === playerWhosePadIsBeingConfigured) {
-                break; // Stop summing once we reach the player whose pad is being configured
+            if (currentPlayerInSequenceId === playerWhosePadIsBeingConfigured) {
+                break;
             }
-
+            
             const scoreEntry = playersScoreData
-                .find(pData => pData.playerId === currentPlayerInLoopId)
+                .find(pData => pData.playerId === currentPlayerInSequenceId)
                 ?.scores.find(s => s.roundNumber === roundNumForCheck);
             
             sumOfTakenByPrecedingPlayersInTurnOrder += (scoreEntry?.taken ?? 0);
-
-            tempPlayerIndex = (tempPlayerIndex + 1) % order.length;
-            
-            // Safety check to prevent infinite loop if playerWhosePadIsBeingConfigured is not in order
-            // This shouldn't happen if data is consistent.
-            if (i === order.length - 1 && currentPlayerInLoopId !== playerWhosePadIsBeingConfigured) {
-                 console.error("getIsTakenInvalid: playerWhosePadIsBeingConfigured not found in order during loop for non-dealer.");
-                 // This case implies an inconsistent state, might be safer to allow any valid number
-                 // or return true to block all, but breaking is likely fine as it's an error state.
-                 break;
-            }
         }
 
         const totalIfCurrentPlayerTakesNumOnPad = sumOfTakenByPrecedingPlayersInTurnOrder + num_on_pad;
@@ -267,7 +257,6 @@ export function ScoreInputTable({
       }
       numPadDisabled = !isPlayerValueUnderActiveEdit; 
 
-      // Check for "Keep & Next" button disable rule
       if (!isPlayerValueUnderActiveEdit && editingPlayerId === currentDealerId && currentRoundConfig) {
         if (currentRoundInputMode === 'BIDDING') {
             let sumOfBidsIfKept = 0;
@@ -509,12 +498,9 @@ export function ScoreInputTable({
 
       {gamePhase === 'SCORING' && currentRoundConfig && (
         <div className="mt-auto p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
-           <div className="flex flex-row items-center justify-start gap-3"> {/* Main container for control panel content */}
-              
-              {/* This div conditionally renders either the main action buttons OR the edit mode UI / numpad UI */}
-              <div className="flex-grow flex items-center"> {/* This div will hold buttons or text+numpad */}
+           <div className="flex flex-row items-center justify-start gap-3">
+              <div className="flex-grow flex items-center">
                 {(showConfirmBidsButton || showAdvanceRoundButton) && mainActionButtonAction ? (
-                    // "Enter Tricks" or "Deal X Cards / Show Final Scores" button
                     <div className="flex items-center gap-2 w-full">
                         <Button 
                             onClick={mainActionButtonAction}
@@ -522,14 +508,13 @@ export function ScoreInputTable({
                         >
                            {mainActionButtonText}
                         </Button>
-                        {onToggleEditMode && ( // "Edit Entries" button
+                        {onToggleEditMode && (
                             <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-3 py-2 text-sm">
                                 <Edit className="mr-1.5 h-4 w-4" /> Edit
                             </Button>
                         )}
                     </div>
                 ) : isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode ? (
-                    // EDITING MODE UI
                     <div className="flex flex-col items-start w-full"> 
                       <p className="text-sm font-medium text-left mb-1 h-5 truncate max-w-[33vw] md:max-w-xs">
                         {isPlayerValueUnderActiveEdit 
@@ -569,7 +554,6 @@ export function ScoreInputTable({
                       )}
                     </div>
                   ) : (
-                     // NORMAL BIDDING/TAKING UI (Text + Numpad)
                      <div className="flex flex-col items-start w-full md:w-auto">
                         <p className="text-sm font-medium text-left mb-1 h-5 truncate max-w-[33vw] md:max-w-xs">
                             {numPadActionText || " "}
@@ -632,4 +616,3 @@ export function ScoreInputTable({
     </Card>
   );
 }
-
