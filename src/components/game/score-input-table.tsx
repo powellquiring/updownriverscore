@@ -80,7 +80,7 @@ export function ScoreInputTable({
     roundConfigForCheck: GameRoundInfo | undefined,
     playerWhosePadIsBeingConfigured: string
   ): ((num_on_pad: number) => boolean) => {
-    if (!roundConfigForCheck || playerOrderForGame.length === 0 || !currentDealerId) {
+    if (!roundConfigForCheck || playerOrderForGame.length === 0 || !currentDealerId || !firstBidderOfRoundId) {
       return () => false; 
     }
     const cardsDealt = roundConfigForCheck.cardsDealt;
@@ -103,31 +103,51 @@ export function ScoreInputTable({
     }
 
     // For non-dealer players:
+    // The sum of tricks taken by players who have already entered their 'taken' value in this round's sequence,
+    // plus the current player's potential input, must not exceed cardsDealt.
     return (num_on_pad: number) => {
         if (num_on_pad < 0 || num_on_pad > cardsDealt) return true;
 
-        // Calculate sum of tricks that would be taken by ALL NON-DEALER players
-        // if the current player (playerWhosePadIsBeingConfigured) takes 'num_on_pad' tricks.
-        let sumOfTakenByAllNonDealersIfCurrentPlayerTakesNumOnPad = 0;
-        playersScoreData.forEach(pData => {
-            if (pData.playerId === dealerForThisRound) return; // Skip dealer
+        let sumOfTakenByPrecedingPlayersInTurnOrder = 0;
+        const order = playerOrderForGame;
+        let tempPlayerIndex = order.indexOf(firstBidderOfRoundId); // firstBidderOfRoundId is checked for null above
 
-            if (pData.playerId === playerWhosePadIsBeingConfigured) {
-                sumOfTakenByAllNonDealersIfCurrentPlayerTakesNumOnPad += num_on_pad;
-            } else {
-                const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumForCheck);
-                sumOfTakenByAllNonDealersIfCurrentPlayerTakesNumOnPad += (scoreEntry?.taken ?? 0);
+        // Iterate through players in turn order for 'taken'
+        // until we reach the playerWhosePadIsBeingConfigured
+        for (let i = 0; i < order.length; i++) {
+            const currentPlayerInLoopId = order[tempPlayerIndex];
+
+            if (currentPlayerInLoopId === playerWhosePadIsBeingConfigured) {
+                break; // Stop summing once we reach the player whose pad is being configured
             }
-        });
-        
-        // If this sum already exceeds cardsDealt, it's impossible for the dealer to balance.
-        if (sumOfTakenByAllNonDealersIfCurrentPlayerTakesNumOnPad > cardsDealt) {
+
+            const scoreEntry = playersScoreData
+                .find(pData => pData.playerId === currentPlayerInLoopId)
+                ?.scores.find(s => s.roundNumber === roundNumForCheck);
+            
+            sumOfTakenByPrecedingPlayersInTurnOrder += (scoreEntry?.taken ?? 0);
+
+            tempPlayerIndex = (tempPlayerIndex + 1) % order.length;
+            
+            // Safety check to prevent infinite loop if playerWhosePadIsBeingConfigured is not in order
+            // This shouldn't happen if data is consistent.
+            if (i === order.length - 1 && currentPlayerInLoopId !== playerWhosePadIsBeingConfigured) {
+                 console.error("getIsTakenInvalid: playerWhosePadIsBeingConfigured not found in order during loop for non-dealer.");
+                 // This case implies an inconsistent state, might be safer to allow any valid number
+                 // or return true to block all, but breaking is likely fine as it's an error state.
+                 break;
+            }
+        }
+
+        const totalIfCurrentPlayerTakesNumOnPad = sumOfTakenByPrecedingPlayersInTurnOrder + num_on_pad;
+
+        if (totalIfCurrentPlayerTakesNumOnPad > cardsDealt) {
            return true;
         }
 
-        return false; // Valid choice for this non-dealer player.
+        return false; 
     };
-  }, [playersScoreData, playerOrderForGame, currentDealerId]);
+  }, [playersScoreData, playerOrderForGame, currentDealerId, firstBidderOfRoundId]);
 
 
   const currentDealerName = allPlayers.find(p => p.id === currentDealerId)?.name;
@@ -216,7 +236,9 @@ export function ScoreInputTable({
   let numPadPlayerName = "";
   let numPadActionText = "";
   let numPadDisabled = true; 
-  let showMainActionButton = false; // Combined state for "Enter Tricks", "Deal X Cards", "Show Final Scores"
+  
+  let showConfirmBidsButton = false;
+  let showAdvanceRoundButton = false;
   let mainActionButtonText = "";
   let mainActionButtonAction: (() => void) | undefined = undefined;
 
@@ -246,7 +268,7 @@ export function ScoreInputTable({
       numPadDisabled = !isPlayerValueUnderActiveEdit; 
 
       // Check for "Keep & Next" button disable rule
-      if (!isPlayerValueUnderActiveEdit && editingPlayerId === currentDealerId) {
+      if (!isPlayerValueUnderActiveEdit && editingPlayerId === currentDealerId && currentRoundConfig) {
         if (currentRoundInputMode === 'BIDDING') {
             let sumOfBidsIfKept = 0;
             playersScoreData.forEach(pData => {
@@ -283,13 +305,13 @@ export function ScoreInputTable({
       numPadPlayerName = allPlayers.find(p => p.id === currentPlayerTakingId)?.name || "";
       numPadActionText = `Taken: ${numPadPlayerName}`;
     } else if (currentRoundInputMode === 'BIDDING' && !currentPlayerBiddingId && !currentRoundBidsConfirmed) { 
-        showMainActionButton = true;
+        showConfirmBidsButton = true;
         mainActionButtonText = "Enter Tricks";
         mainActionButtonAction = onConfirmBidsForRound;
         numPadActionText = ""; 
         numPadDisabled = true;
     } else if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) { 
-        showMainActionButton = true;
+        showAdvanceRoundButton = true;
         mainActionButtonText = currentRoundForInput < gameRounds.length 
             ? `Deal ${gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || ''} cards` 
             : "Show Final Scores";
@@ -487,11 +509,28 @@ export function ScoreInputTable({
 
       {gamePhase === 'SCORING' && currentRoundConfig && (
         <div className="mt-auto p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
-           <div className="flex flex-row items-center justify-start gap-3">
-              <div className="flex flex-col items-start w-full md:w-auto"> 
-                  {isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode ? (
+           <div className="flex flex-row items-center justify-start gap-3"> {/* Main container for control panel content */}
+              
+              {/* This div conditionally renders either the main action buttons OR the edit mode UI / numpad UI */}
+              <div className="flex-grow flex items-center"> {/* This div will hold buttons or text+numpad */}
+                {(showConfirmBidsButton || showAdvanceRoundButton) && mainActionButtonAction ? (
+                    // "Enter Tricks" or "Deal X Cards / Show Final Scores" button
+                    <div className="flex items-center gap-2 w-full">
+                        <Button 
+                            onClick={mainActionButtonAction}
+                            className="bg-accent hover:bg-accent/90 text-accent-foreground px-4 py-2 text-sm max-w-[45vw] md:max-w-xs"
+                        >
+                           {mainActionButtonText}
+                        </Button>
+                        {onToggleEditMode && ( // "Edit Entries" button
+                            <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-3 py-2 text-sm">
+                                <Edit className="mr-1.5 h-4 w-4" /> Edit
+                            </Button>
+                        )}
+                    </div>
+                ) : isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode ? (
                     // EDITING MODE UI
-                    <>
+                    <div className="flex flex-col items-start w-full"> 
                       <p className="text-sm font-medium text-left mb-1 h-5 truncate max-w-[33vw] md:max-w-xs">
                         {isPlayerValueUnderActiveEdit 
                           ? `Editing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}`
@@ -528,25 +567,10 @@ export function ScoreInputTable({
                           <Button onClick={onToggleEditMode} variant="ghost" size="sm" className="text-destructive hover:text-destructive/80">Cancel Edit</Button>
                         </div>
                       )}
-                    </>
-                  ) : showMainActionButton && mainActionButtonAction ? (
-                     // MAIN ACTION BUTTON ("Enter Tricks", "Deal X cards", etc.)
-                     <div className="flex items-center gap-2">
-                        <Button 
-                            onClick={mainActionButtonAction}
-                            className="w-auto bg-accent hover:bg-accent/90 text-accent-foreground px-4 py-2 text-sm max-w-[calc(66vw-4rem)]" // Adjusted max-width to leave space for Edit button
-                        >
-                           {mainActionButtonText}
-                        </Button>
-                        {onToggleEditMode && (
-                            <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-3 py-2 text-sm">
-                                <Edit className="mr-1.5 h-4 w-4" /> Edit
-                            </Button>
-                        )}
                     </div>
                   ) : (
-                     // NORMAL BIDDING/TAKING UI
-                     <>
+                     // NORMAL BIDDING/TAKING UI (Text + Numpad)
+                     <div className="flex flex-col items-start w-full md:w-auto">
                         <p className="text-sm font-medium text-left mb-1 h-5 truncate max-w-[33vw] md:max-w-xs">
                             {numPadActionText || " "}
                         </p>
@@ -568,7 +592,7 @@ export function ScoreInputTable({
                             isNumberInvalid={numPadIsInvalidFn}
                             className="max-w-[66vw] md:max-w-none"
                         />
-                    </>
+                    </div>
                   )}
               </div>
           </div>
@@ -578,7 +602,7 @@ export function ScoreInputTable({
 
       {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (
         <div className="px-1 md:px-0 mt-2 pb-2 flex flex-row justify-between items-center gap-1 md:gap-2">
-          <Button onClick={onRestartGame} variant="outline" size="sm" className="w-auto max-w-[calc(50%-0.25rem)] text-xs">
+          <Button onClick={onRestartGame} variant="outline" size="sm" className="w-auto max-w-[calc(50%-0.25rem)] md:max-w-[33vw] text-xs">
             <RefreshCw className="mr-1 h-3 w-3" /> {gamePhase === 'RESULTS' ? "Play New Game" : "Restart Game"}
           </Button>
 
@@ -587,7 +611,7 @@ export function ScoreInputTable({
                 onClick={onFinishGame}
                 variant="destructive"
                 size="sm"
-                className="w-auto max-w-[calc(50%-0.25rem)] text-xs"
+                className="w-auto max-w-[calc(50%-0.25rem)] md:max-w-[33vw] text-xs"
                 disabled={
                     (currentRoundInputMode === 'BIDDING' && !!currentPlayerBiddingId) ||
                     (currentRoundInputMode === 'TAKING' && !!currentPlayerTakingId && currentRoundBidsConfirmed)
@@ -608,3 +632,4 @@ export function ScoreInputTable({
     </Card>
   );
 }
+
