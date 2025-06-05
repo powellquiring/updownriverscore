@@ -57,6 +57,11 @@ export function GameManager() {
   const [currentPlayerTakingId, setCurrentPlayerTakingId] = useState<string | null>(null);
   const [currentRoundBidsConfirmed, setCurrentRoundBidsConfirmed] = useState<boolean>(false);
 
+  // State for "Edit Entries" mode
+  const [isEditingCurrentRound, setIsEditingCurrentRound] = useState<boolean>(false);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [isPlayerValueUnderActiveEdit, setIsPlayerValueUnderActiveEdit] = useState<boolean>(false);
+
   
   const handlePlayAgain = useCallback(() => {
     setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
@@ -72,6 +77,9 @@ export function GameManager() {
     setFirstBidderOfRoundId(null);
     setCurrentPlayerTakingId(null);
     setCurrentRoundBidsConfirmed(false);
+    setIsEditingCurrentRound(false);
+    setEditingPlayerId(null);
+    setIsPlayerValueUnderActiveEdit(false);
     localStorage.removeItem('updownRiverScorerState'); 
     localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
   }, []);
@@ -108,6 +116,11 @@ export function GameManager() {
         if (state.currentPlayerTakingId && typeof state.currentPlayerTakingId === 'string') setCurrentPlayerTakingId(state.currentPlayerTakingId);
         setCurrentRoundBidsConfirmed(state.currentRoundBidsConfirmed === true);
 
+        setIsEditingCurrentRound(state.isEditingCurrentRound === true);
+        setEditingPlayerId(state.editingPlayerId && typeof state.editingPlayerId === 'string' ? state.editingPlayerId : null);
+        setIsPlayerValueUnderActiveEdit(state.isPlayerValueUnderActiveEdit === true);
+
+
       } catch (error) {
         console.error("Failed to load saved state:", error);
         localStorage.removeItem('updownRiverScorerState'); 
@@ -125,6 +138,7 @@ export function GameManager() {
         playersScoreData.length === 0 &&
         currentRoundInputMode === 'BIDDING' &&
         !currentRoundBidsConfirmed &&
+        !isEditingCurrentRound && // Added check for new state
         !localStorage.getItem('updownRiverScorerState_gameStartedOnce')) {
       return;
     }
@@ -133,10 +147,11 @@ export function GameManager() {
       players, gameRounds, playersScoreData, currentRoundForInput, gamePhase,
       firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId,
       currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed,
+      isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit, // Save new states
     };
     localStorage.setItem('updownRiverScorerState', JSON.stringify(stateToSave));
     if (gamePhase !== 'SETUP') localStorage.setItem('updownRiverScorerState_gameStartedOnce', 'true');
-  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed]);
+  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit]);
 
 
   const handleAddPlayer = useCallback((name: string) => {
@@ -176,6 +191,7 @@ export function GameManager() {
     setCurrentPlayerBiddingId(null); setFirstBidderOfRoundId(null); setCurrentPlayerTakingId(null);
     setCurrentRoundBidsConfirmed(false);
     setCurrentRoundInputMode('BIDDING');
+    setIsEditingCurrentRound(false); setEditingPlayerId(null); setIsPlayerValueUnderActiveEdit(false);
     setGamePhase('DEALER_SELECTION');
     console.log("Game Ready! Please select the dealer for the first round.");
   }, [players]);
@@ -197,15 +213,18 @@ export function GameManager() {
     setCurrentPlayerTakingId(null); 
     setCurrentRoundBidsConfirmed(false);
     setCurrentRoundInputMode('BIDDING'); 
+    setIsEditingCurrentRound(false); setEditingPlayerId(null); setIsPlayerValueUnderActiveEdit(false);
     setGamePhase('SCORING');
     console.log("Dealer Selected. Bidding for Round 1 begins.");
   }, [players, playerOrderForGame]);
 
   const handleSubmitBid = useCallback((playerId: string, bidStr: string) => {
-    if (playerId !== currentPlayerBiddingId) {
-        console.warn("Not your turn to bid.");
+    const activePlayerId = isEditingCurrentRound ? editingPlayerId : currentPlayerBiddingId;
+    if (playerId !== activePlayerId) {
+        console.warn("Not your turn to bid or edit bid.");
         return;
     }
+
     const bid = parseInt(bidStr, 10);
     const currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
     const currentRoundCards = currentRoundInfo?.cardsDealt;
@@ -214,8 +233,9 @@ export function GameManager() {
         console.warn(`Invalid Bid. Bid must be 0 to ${currentRoundCards ?? 'max'}.`);
         return;
     }
-
-    if (playerId === currentDealerId && currentRoundCards !== undefined) {
+    
+    const dealerForThisRound = currentDealerId; // In edit mode, currentDealerId is the dealer for the round being edited.
+    if (playerId === dealerForThisRound && currentRoundCards !== undefined) {
         const sumOfOtherPlayerBids = playersScoreData.reduce((sum, pData) => {
             if (pData.playerId !== playerId) { 
                 const scoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
@@ -241,20 +261,24 @@ export function GameManager() {
         }))
     );
 
-    const order = playerOrderForGame;
-    const currentBidderIndex = order.indexOf(playerId);
-    const nextBidderId = order[(currentBidderIndex + 1) % order.length];
+    if (isEditingCurrentRound && editingPlayerId === playerId) {
+        setIsPlayerValueUnderActiveEdit(false); // Go back to review state for this player
+    } else if (!isEditingCurrentRound) {
+        const order = playerOrderForGame;
+        const currentBidderIndex = order.indexOf(playerId);
+        const nextBidderId = order[(currentBidderIndex + 1) % order.length];
 
-    if (nextBidderId === firstBidderOfRoundId) { 
-        setCurrentPlayerBiddingId(null); 
-        console.log(`All bids submitted for Round ${currentRoundForInput}. Click 'Enter Tricks' to proceed.`);
-    } else {
-        setCurrentPlayerBiddingId(nextBidderId);
+        if (nextBidderId === firstBidderOfRoundId) { 
+            setCurrentPlayerBiddingId(null); 
+            console.log(`All bids submitted for Round ${currentRoundForInput}. Click 'Enter Tricks' to proceed.`);
+        } else {
+            setCurrentPlayerBiddingId(nextBidderId);
+        }
     }
-  }, [currentPlayerBiddingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, playersScoreData, currentDealerId]);
+  }, [currentPlayerBiddingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, playersScoreData, currentDealerId, isEditingCurrentRound, editingPlayerId]);
 
   const handleConfirmBidsForRound = useCallback(() => {
-    if (currentPlayerBiddingId !== null || currentRoundBidsConfirmed) {
+    if (currentPlayerBiddingId !== null || currentRoundBidsConfirmed || isEditingCurrentRound) {
       console.warn("Cannot confirm bids at this time.");
       return;
     }
@@ -262,10 +286,14 @@ export function GameManager() {
     setCurrentRoundInputMode('TAKING');
     setCurrentPlayerTakingId(firstBidderOfRoundId); 
     console.log("Bids Confirmed! Now enter tricks taken.");
-  }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId]);
+  }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId, isEditingCurrentRound]);
 
 
   const handleAdvanceRoundOrEndGame = useCallback(() => {
+    if (isEditingCurrentRound) {
+        console.warn("Finish or cancel editing before advancing round.");
+        return;
+    }
     if (currentRoundForInput < gameRounds.length) {
       const newRoundNumber = currentRoundForInput + 1;
       setCurrentRoundForInput(newRoundNumber);
@@ -292,12 +320,13 @@ export function GameManager() {
       setCurrentRoundBidsConfirmed(false);
       console.log("Game Finished! All rounds completed. Final scores are displayed below.");
     }
-  }, [currentRoundForInput, gameRounds, playerOrderForGame, currentDealerId]);
+  }, [currentRoundForInput, gameRounds, playerOrderForGame, currentDealerId, isEditingCurrentRound]);
 
 
   const handleSubmitTaken = useCallback((playerId: string, takenStr: string) => {
-    if (playerId !== currentPlayerTakingId || !currentRoundBidsConfirmed) {
-        console.warn("Not your turn or bids not confirmed.");
+    const activePlayerId = isEditingCurrentRound ? editingPlayerId : currentPlayerTakingId;
+    if (playerId !== activePlayerId || (!currentRoundBidsConfirmed && !isEditingCurrentRound)) {
+        console.warn("Not your turn or bids not confirmed / not in edit mode.");
         return;
     }
     const taken = parseInt(takenStr, 10);
@@ -311,26 +340,40 @@ export function GameManager() {
     
     let currentSumOfTakenThisRound = 0;
     playersScoreData.forEach(pData => {
-        if (pData.playerId !== playerId) {
+        if (pData.playerId !== playerId) { // Sum taken by OTHERS
             const scoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
             currentSumOfTakenThisRound += (scoreEntry?.taken ?? 0);
         }
     });
-    currentSumOfTakenThisRound += taken;
+    currentSumOfTakenThisRound += taken; // Add current player's proposed taken
 
     const order = playerOrderForGame;
-    const currentTakerIndex = order.indexOf(playerId);
-    const nextTakerId = order[(currentTakerIndex + 1) % order.length];
-    const isLastPlayerToTake = nextTakerId === firstBidderOfRoundId;
+    // For validation, "last player" means the dealer of the current round.
+    const dealerForThisRound = currentDealerId; 
+    const isThisPlayerTheDealer = playerId === dealerForThisRound;
 
 
-    if (isLastPlayerToTake && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound !== cardsInCurrentRound) {
-        console.warn(`Invalid Total Taken. Total tricks taken (${currentSumOfTakenThisRound}) must equal cards dealt (${cardsInCurrentRound}). Adjust last player's entry.`);
+    if (isThisPlayerTheDealer && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound !== cardsInCurrentRound) {
+        console.warn(`Invalid Total Taken. For dealer, total tricks taken (${currentSumOfTakenThisRound}) must equal cards dealt (${cardsInCurrentRound}). Adjust entry.`);
         return; 
     }
-    if (!isLastPlayerToTake && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound > cardsInCurrentRound) {
-         console.warn(`Invalid Taken Count. Total tricks taken so far (${currentSumOfTakenThisRound}) exceeds cards dealt (${cardsInCurrentRound}).`);
-         return;
+    if (!isThisPlayerTheDealer && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound > cardsInCurrentRound) {
+         // Check if sum of *all* players' 'taken' (including this proposed one) exceeds cards dealt.
+         // This requires iterating through all players and summing their 'taken' values for the current round,
+         // substituting 'taken' for the current player 'playerId'.
+         let tempTotalTakenForAll = 0;
+         playersScoreData.forEach(pData => {
+            const scoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
+            if (pData.playerId === playerId) {
+                tempTotalTakenForAll += taken;
+            } else {
+                tempTotalTakenForAll += (scoreEntry?.taken ?? 0);
+            }
+         });
+         if (tempTotalTakenForAll > cardsInCurrentRound) {
+            console.warn(`Invalid Taken Count. Total tricks taken so far by all players (${tempTotalTakenForAll}) would exceed cards dealt (${cardsInCurrentRound}).`);
+            return;
+         }
     }
     
     setPlayersScoreData(prevData =>
@@ -351,18 +394,28 @@ export function GameManager() {
       }))
     );
 
-    if (isLastPlayerToTake) { 
-        setCurrentPlayerTakingId(null); 
-        console.log(`Tricks taken submitted. All tricks for Round ${currentRoundForInput} recorded.`);
-    } else {
-        setCurrentPlayerTakingId(nextTakerId);
+    if (isEditingCurrentRound && editingPlayerId === playerId) {
+        setIsPlayerValueUnderActiveEdit(false); // Go back to review state
+    } else if (!isEditingCurrentRound) {
+        const currentTakerIndex = order.indexOf(playerId);
+        const nextTakerId = order[(currentTakerIndex + 1) % order.length];
+        if (nextTakerId === firstBidderOfRoundId) { 
+            setCurrentPlayerTakingId(null); 
+            console.log(`Tricks taken submitted. All tricks for Round ${currentRoundForInput} recorded.`);
+        } else {
+            setCurrentPlayerTakingId(nextTakerId);
+        }
     }
   }, [
     currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, 
-    playerOrderForGame, firstBidderOfRoundId, playersScoreData
+    playerOrderForGame, firstBidderOfRoundId, playersScoreData, isEditingCurrentRound, editingPlayerId, currentDealerId
   ]);
 
   const handleFinishGameEarly = useCallback(() => {
+    if (isEditingCurrentRound) {
+        console.warn("Finish or cancel editing before finishing game early.");
+        return;
+    }
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && gamePhase === 'SCORING') {
          console.warn("Complete bidding for the current player first.");
          return;
@@ -385,8 +438,58 @@ export function GameManager() {
     setCurrentPlayerTakingId(null);
     setCurrentRoundInputMode('BIDDING');
     setCurrentRoundBidsConfirmed(false);
+    setIsEditingCurrentRound(false); setEditingPlayerId(null); setIsPlayerValueUnderActiveEdit(false);
     console.log("Game Finished Early! Displaying current scores.");
-  }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, gamePhase]);
+  }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, gamePhase, isEditingCurrentRound]);
+
+
+  // Handlers for "Edit Entries" mode
+  const handleToggleEditMode = useCallback(() => {
+    if (isEditingCurrentRound) { // If currently editing, this means cancel
+        setIsEditingCurrentRound(false);
+        setEditingPlayerId(null);
+        setIsPlayerValueUnderActiveEdit(false);
+    } else { // If not editing, this means start editing
+        const canStartEditingBids = currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed;
+        const canStartEditingTaken = currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed;
+
+        if (canStartEditingBids || canStartEditingTaken) {
+            setIsEditingCurrentRound(true);
+            setEditingPlayerId(firstBidderOfRoundId); 
+            setIsPlayerValueUnderActiveEdit(false); 
+        } else {
+            console.warn("Cannot enter edit mode at this stage. Bids/Tricks must be fully submitted for the round first.");
+        }
+    }
+  }, [isEditingCurrentRound, currentRoundInputMode, currentPlayerBiddingId, currentRoundBidsConfirmed, currentPlayerTakingId, firstBidderOfRoundId]);
+
+  const handleKeepPlayerValue = useCallback(() => {
+    if (!isEditingCurrentRound || !editingPlayerId || playerOrderForGame.length === 0) return;
+
+    const order = playerOrderForGame;
+    const currentEditingPlayerIndex = order.indexOf(editingPlayerId);
+    if (currentEditingPlayerIndex === -1) { // Should not happen
+        setIsEditingCurrentRound(false); setEditingPlayerId(null); return;
+    }
+
+    const nextEditingPlayerIndex = (currentEditingPlayerIndex + 1) % order.length;
+    const nextPlayerId = order[nextEditingPlayerIndex];
+
+    if (nextPlayerId === firstBidderOfRoundId) { // Cycled through all players
+        setIsEditingCurrentRound(false);
+        setEditingPlayerId(null);
+        setIsPlayerValueUnderActiveEdit(false);
+        console.log("Finished editing entries for the round.");
+    } else {
+        setEditingPlayerId(nextPlayerId);
+        setIsPlayerValueUnderActiveEdit(false);
+    }
+  }, [isEditingCurrentRound, editingPlayerId, playerOrderForGame, firstBidderOfRoundId]);
+
+  const handleSetActiveEditPlayerValue = useCallback((active: boolean) => {
+    if (!isEditingCurrentRound || !editingPlayerId) return;
+    setIsPlayerValueUnderActiveEdit(active);
+  }, [isEditingCurrentRound, editingPlayerId]);
 
 
   if (gamePhase === 'SETUP') {
@@ -433,6 +536,13 @@ export function GameManager() {
         onFinishGame={handleFinishGameEarly}
         onRestartGame={handlePlayAgain}
         onSelectDealer={handleSelectDealer}
+        // Pass new state and handlers for edit mode
+        isEditingCurrentRound={isEditingCurrentRound}
+        editingPlayerId={editingPlayerId}
+        isPlayerValueUnderActiveEdit={isPlayerValueUnderActiveEdit}
+        onToggleEditMode={handleToggleEditMode}
+        onKeepPlayerValue={handleKeepPlayerValue}
+        onSetActiveEditPlayerValue={handleSetActiveEditPlayerValue}
       />
     );
   }

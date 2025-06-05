@@ -48,5 +48,12 @@ export interface ScoreInputTableProps {
   onFinishGame: () => void;
   onRestartGame: () => void;
   onSelectDealer: (playerId: string) => void;
+  // New props for edit mode
+  isEditingCurrentRound?: boolean;
+  editingPlayerId?: string | null;
+  isPlayerValueUnderActiveEdit?: boolean;
+  onToggleEditMode?: () => void;
+  onKeepPlayerValue?: () => void;
+  onSetActiveEditPlayerValue?: (active: boolean) => void;
 }
 
