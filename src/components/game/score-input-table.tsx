@@ -107,8 +107,6 @@ export function ScoreInputTable({
 
         let sumOfTakenByPrecedingPlayersInTurnOrder = 0;
         
-        // Only calculate sum of preceding if current player is NOT the first bidder.
-        // If current player IS the first bidder, this sum remains 0.
         if (playerWhosePadIsBeingConfigured !== firstBidderOfRoundId) {
             const order = playerOrderForGame;
             const startIndex = order.indexOf(firstBidderOfRoundId); 
@@ -229,6 +227,7 @@ export function ScoreInputTable({
   let numPadCurrentValue: number | null = null;
   let numPadIsInvalidFn: ((num: number) => boolean) | undefined = undefined;
   let numPadActionText = "";
+  let numPadPlayerName = ""; // Declare numPadPlayerName here
   let numPadDisabledGlobally = true; 
   
   let showConfirmBidsButton = false;
@@ -328,7 +327,7 @@ export function ScoreInputTable({
               className={cn(
                 "mt-1 mb-1",
                 gamePhase === 'DEALER_SELECTION'
-                  ? "text-xl text-primary-foreground font-semibold" // Larger and header color for dealer selection
+                  ? "text-xl text-primary-foreground font-semibold" 
                   : "text-xs text-muted-foreground"
               )}
             >
@@ -499,101 +498,86 @@ export function ScoreInputTable({
       {gamePhase === 'SCORING' && currentRoundConfig && (
         <div className="mt-auto p-1 sm:p-2 md:p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
            <div className="flex flex-row items-center justify-start gap-3">
-                <div className="flex-grow flex items-center">
-                    {(showConfirmBidsButton && onConfirmBidsForRound) ? (
-                        <div className="flex items-center gap-1 sm:gap-2">
-                            <Button 
-                                onClick={onConfirmBidsForRound}
-                                className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
-                            >
-                               {mainActionButtonText}
+                
+                {(showConfirmBidsButton && onConfirmBidsForRound) || (showAdvanceRoundButton && onAdvanceRoundOrEndGame) ? (
+                    <div className="flex items-center gap-1 sm:gap-2">
+                        <Button 
+                            onClick={showConfirmBidsButton ? onConfirmBidsForRound : onAdvanceRoundOrEndGame}
+                            className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
+                        >
+                           {mainActionButtonText}
+                        </Button>
+                        {onToggleEditMode && (
+                            <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
+                                <Edit className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-4 sm:w-4" /> Edit Entries
                             </Button>
-                            {onToggleEditMode && (
-                                <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
-                                    <Edit className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-4 sm:w-4" /> Edit Entries
-                                </Button>
-                            )}
-                        </div>
-                    ) : (showAdvanceRoundButton && onAdvanceRoundOrEndGame) ? (
-                        <div className="flex items-center gap-1 sm:gap-2">
-                            <Button 
-                                onClick={onAdvanceRoundOrEndGame}
-                                className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
-                            >
-                               {mainActionButtonText}
-                            </Button>
-                             {onToggleEditMode && (
-                                <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
-                                    <Edit className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-4 sm:w-4" /> Edit Entries
-                                </Button>
-                            )}
-                        </div>
-                    ) : isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode ? (
-                        <div className="flex flex-col items-start w-full"> 
-                        <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
-                            {isPlayerValueUnderActiveEdit 
-                            ? `${numPadActionText}`
-                            : `Reviewing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}: ${activeEditingPlayerCurrentValue}`
+                        )}
+                    </div>
+                ) : isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode ? (
+                    <div className="flex flex-col items-start w-full"> 
+                    <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
+                        {isPlayerValueUnderActiveEdit 
+                        ? `${numPadActionText}`
+                        : `Reviewing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}: ${activeEditingPlayerCurrentValue}`
+                        }
+                    </p>
+                    {isPlayerValueUnderActiveEdit ? (
+                        <NumberInputPad
+                        min={0}
+                        max={currentRoundConfig.cardsDealt}
+                        onSelectNumber={(value) => {
+                            if (currentRoundInputMode === 'BIDDING') {
+                            onSubmitBid(editingPlayerId, value.toString());
+                            } else {
+                            onSubmitTaken(editingPlayerId, value.toString());
                             }
+                        }}
+                        currentValue={numPadCurrentValue}
+                        disabled={numPadDisabledGlobally}
+                        isNumberInvalid={numPadIsInvalidFn}
+                        className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"
+                        />
+                    ) : (
+                        <div className="flex items-center gap-1 sm:gap-2">
+                        <Button 
+                            onClick={onKeepPlayerValue} 
+                            variant="outline" 
+                            size="sm"
+                            className="px-2 sm:px-3 text-xs sm:text-sm"
+                            disabled={disableKeepAndNextDueToRuleViolation}
+                        >
+                            Keep & Next
+                        </Button>
+                        <Button onClick={() => onSetActiveEditPlayerValue && onSetActiveEditPlayerValue(true)} size="sm" className="px-2 sm:px-3 text-xs sm:text-sm">Edit Value</Button>
+                        <Button onClick={onToggleEditMode} variant="ghost" size="sm" className="text-destructive hover:text-destructive/80 px-2 sm:px-3 text-xs sm:text-sm">Cancel Edit</Button>
+                        </div>
+                    )}
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-start w-full md:w-auto">
+                        <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
+                            {numPadActionText || " "}
                         </p>
-                        {isPlayerValueUnderActiveEdit ? (
-                            <NumberInputPad
+                        <NumberInputPad
                             min={0}
                             max={currentRoundConfig.cardsDealt}
                             onSelectNumber={(value) => {
+                                const targetPlayerId = currentRoundInputMode === 'BIDDING' ? currentPlayerBiddingId : currentPlayerTakingId;
+                                if (targetPlayerId) {
                                 if (currentRoundInputMode === 'BIDDING') {
-                                onSubmitBid(editingPlayerId, value.toString());
+                                    onSubmitBid(targetPlayerId, value.toString());
                                 } else {
-                                onSubmitTaken(editingPlayerId, value.toString());
+                                    onSubmitTaken(targetPlayerId, value.toString());
+                                }
                                 }
                             }}
                             currentValue={numPadCurrentValue}
                             disabled={numPadDisabledGlobally}
                             isNumberInvalid={numPadIsInvalidFn}
                             className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"
-                            />
-                        ) : (
-                            <div className="flex items-center gap-1 sm:gap-2">
-                            <Button 
-                                onClick={onKeepPlayerValue} 
-                                variant="outline" 
-                                size="sm"
-                                className="px-2 sm:px-3 text-xs sm:text-sm"
-                                disabled={disableKeepAndNextDueToRuleViolation}
-                            >
-                                Keep & Next
-                            </Button>
-                            <Button onClick={() => onSetActiveEditPlayerValue && onSetActiveEditPlayerValue(true)} size="sm" className="px-2 sm:px-3 text-xs sm:text-sm">Edit Value</Button>
-                            <Button onClick={onToggleEditMode} variant="ghost" size="sm" className="text-destructive hover:text-destructive/80 px-2 sm:px-3 text-xs sm:text-sm">Cancel Edit</Button>
-                            </div>
-                        )}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-start w-full md:w-auto">
-                            <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
-                                {numPadActionText || " "}
-                            </p>
-                            <NumberInputPad
-                                min={0}
-                                max={currentRoundConfig.cardsDealt}
-                                onSelectNumber={(value) => {
-                                    const targetPlayerId = currentRoundInputMode === 'BIDDING' ? currentPlayerBiddingId : currentPlayerTakingId;
-                                    if (targetPlayerId) {
-                                    if (currentRoundInputMode === 'BIDDING') {
-                                        onSubmitBid(targetPlayerId, value.toString());
-                                    } else {
-                                        onSubmitTaken(targetPlayerId, value.toString());
-                                    }
-                                    }
-                                }}
-                                currentValue={numPadCurrentValue}
-                                disabled={numPadDisabledGlobally}
-                                isNumberInvalid={numPadIsInvalidFn}
-                                className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"
-                            />
-                        </div>
-                    )}
-                </div>
+                        />
+                    </div>
+                )}
           </div>
         </div>
       )}
