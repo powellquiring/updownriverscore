@@ -10,7 +10,6 @@ import { RefreshCw, UserCheck, UserCog, Target, Flag, Award, Edit } from 'lucide
 import { NumberInputPad } from './number-input-pad';
 import { cn } from '@/lib/utils';
 
-
 export function ScoreInputTable({
   playersScoreData,
   allPlayers,
@@ -40,6 +39,29 @@ export function ScoreInputTable({
   onKeepPlayerValue,
   onSetActiveEditPlayerValue,
 }: ScoreInputTableProps) {
+  const isDealerForRound = useCallback((
+    playerId: string, 
+    roundNumber: number,
+    firstDealerId: string | null,
+    playerOrder: string[]
+  ): boolean => {
+    if (roundNumber === 1 && playerId === firstDealerId) {
+      return true;
+    }
+    
+    if (!firstDealerId || playerOrder.length === 0) {
+      return false;
+    }
+    
+    // Calculate dealer based on round number and player rotation
+    const firstDealerIndex = playerOrder.indexOf(firstDealerId);
+    if (firstDealerIndex === -1) return false;
+    
+    // Dealer rotates each round, so we calculate the index based on round number
+    const dealerIndexForRound = (firstDealerIndex + (roundNumber - 1)) % playerOrder.length;
+    return playerId === playerOrder[dealerIndexForRound];
+  }, []);
+
   const currentRoundConfig = gameRounds.find(r => r.roundNumber === currentRoundForInput);
   const playersForDisplay = gamePhase === 'DEALER_SELECTION' ? allPlayers.map(p => ({ ...p, playerId: p.id, name: p.name, scores: [], totalScore: 0 })) : playersScoreData;
 
@@ -458,7 +480,7 @@ export function ScoreInputTable({
                       <>
                         {player.name}
                         {currentDealerId === player.playerId && gamePhase === 'SCORING' && <UserCog className="ml-0.5 h-2 w-2 sm:h-3 sm:w-3 inline text-primary-foreground/80" />}
-                        {(isPlayerActiveForBiddingLive(player.playerId, currentRoundForInput) || isPlayerActiveForTakingLive(player.playerId, currentRoundForInput) || isPlayerActiveForEditingLive(player.playerId, currentRoundForInput)) && <Target className="ml-0.5 h-2 w-2 sm:h-3 sm:w-3 inline text-accent" title="Current Turn" />}
+                        {(isPlayerActiveForBiddingLive(player.playerId, currentRoundForInput) || isPlayerActiveForTakingLive(player.playerId, currentRoundForInput) || isPlayerActiveForEditingLive(player.playerId, currentRoundForInput)) && <Target className="ml-0.5 h-2 w-2 sm:h-3 sm:w-3 inline text-accent" />}
                       </>
                     )}
                   </TableHead>
@@ -521,6 +543,19 @@ export function ScoreInputTable({
                             return null;
                           }
 
+                          // Get the dealer for this specific round
+                          const isDealerForThisRound = player.playerId === currentDealerId && roundInfo.roundNumber === currentRoundForInput;
+                          
+                          // For past rounds, we need to calculate who was the dealer
+                          const isPastRoundDealer = roundInfo.roundNumber < currentRoundForInput && 
+                            ((firstDealerPlayerId && roundInfo.roundNumber === 1 && player.playerId === firstDealerPlayerId) || 
+                            (roundInfo.roundNumber > 1 && isDealerForRound(
+                              player.playerId, 
+                              roundInfo.roundNumber,
+                              firstDealerPlayerId,
+                              playerOrderForGame
+                            )));
+
                           const isActiveForBidding = isPlayerActiveForBiddingLive(player.playerId, roundInfo.roundNumber);
                           const isActiveForTaking = isPlayerActiveForTakingLive(player.playerId, roundInfo.roundNumber);
                           const isActiveForEditing = isPlayerActiveForEditingLive(player.playerId, roundInfo.roundNumber);
@@ -533,7 +568,15 @@ export function ScoreInputTable({
                             <TableCell key={`${player.playerId}-${roundInfo.roundNumber}`}
                                 className={cn(
                                     "text-center align-middle py-0 px-0",
-                                    player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30"
+                                    player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30",
+                                    (isDealerForThisRound || isPastRoundDealer || 
+                                     (gamePhase === 'RESULTS' && isDealerForRound(
+                                       player.playerId, 
+                                       roundInfo.roundNumber,
+                                       firstDealerPlayerId,
+                                       playerOrderForGame
+                                     ))) && 
+                                     "bg-primary/20 border-l border-r border-primary/30"
                                 )}
                             >
                                   <div
