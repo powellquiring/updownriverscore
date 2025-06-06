@@ -358,21 +358,23 @@ export function GameManager() {
         return; 
     }
     if (!isThisPlayerTheDealer && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound > cardsInCurrentRound) {
-         // Check if sum of *all* players' 'taken' (including this proposed one) exceeds cards dealt.
-         // This requires iterating through all players and summing their 'taken' values for the current round,
-         // substituting 'taken' for the current player 'playerId'.
-         let tempTotalTakenForAll = 0;
-         playersScoreData.forEach(pData => {
-            const scoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
-            if (pData.playerId === playerId) {
-                tempTotalTakenForAll += taken;
-            } else {
-                tempTotalTakenForAll += (scoreEntry?.taken ?? 0);
-            }
-         });
-         if (tempTotalTakenForAll > cardsInCurrentRound) {
-            console.warn(`Invalid Taken Count. Total tricks taken so far by all players (${tempTotalTakenForAll}) would exceed cards dealt (${cardsInCurrentRound}).`);
-            return;
+         // Only perform this validation for non-editing mode
+         // In edit mode, we allow temporary excess as players' values will be adjusted later
+         if (!isEditingCurrentRound) {
+             // Check if sum of *all* players' 'taken' (including this proposed one) exceeds cards dealt.
+             let tempTotalTakenForAll = 0;
+             playersScoreData.forEach(pData => {
+                const scoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
+                if (pData.playerId === playerId) {
+                    tempTotalTakenForAll += taken;
+                } else {
+                    tempTotalTakenForAll += (scoreEntry?.taken ?? 0);
+                }
+             });
+             if (tempTotalTakenForAll > cardsInCurrentRound) {
+                console.warn(`Invalid Taken Count. Total tricks taken so far by all players (${tempTotalTakenForAll}) would exceed cards dealt (${cardsInCurrentRound}).`);
+                return;
+             }
          }
     }
     

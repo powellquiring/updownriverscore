@@ -24,6 +24,8 @@ export function NumberInputPad({
   isNumberInvalid,
   className,
 }: NumberInputPadProps) {
+  console.log('NumberInputPad rendering', { min, max, currentValue, disabled });
+  
   if (disabled && !isNumberInvalid) { // If pad is generally disabled but no specific invalidation logic, show N/A
     return (
       <div className={cn("p-2 text-center text-muted-foreground", className)}>
