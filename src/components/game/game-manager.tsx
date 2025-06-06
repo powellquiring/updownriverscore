@@ -62,6 +62,12 @@ export function GameManager() {
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [isPlayerValueUnderActiveEdit, setIsPlayerValueUnderActiveEdit] = useState<boolean>(false);
 
+  // Add a new state to store the original game state
+  const [tempGameState, setTempGameState] = useState<{
+    originalRound: number;
+    originalMode: CurrentRoundInputMode;
+    originalBidsConfirmed: boolean;
+  } | null>(null);
   
   const handlePlayAgain = useCallback(() => {
     setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
@@ -470,29 +476,78 @@ export function GameManager() {
 
     const order = playerOrderForGame;
     const currentEditingPlayerIndex = order.indexOf(editingPlayerId);
-    if (currentEditingPlayerIndex === -1) { // Should not happen
-        setIsEditingCurrentRound(false); setEditingPlayerId(null); return;
+    if (currentEditingPlayerIndex === -1) {
+      setIsEditingCurrentRound(false);
+      setEditingPlayerId(null);
+      return;
     }
 
     const nextEditingPlayerIndex = (currentEditingPlayerIndex + 1) % order.length;
     const nextPlayerId = order[nextEditingPlayerIndex];
 
     if (nextPlayerId === firstBidderOfRoundId) { // Cycled through all players
-        setIsEditingCurrentRound(false);
-        setEditingPlayerId(null);
-        setIsPlayerValueUnderActiveEdit(false);
-        console.log("Finished editing entries for the round.");
+      setIsEditingCurrentRound(false);
+      setEditingPlayerId(null);
+      setIsPlayerValueUnderActiveEdit(false);
+      
+      // Restore original game state if we were editing a past round
+      if (tempGameState && tempGameState.originalRound !== currentRoundForInput) {
+        setCurrentRoundForInput(tempGameState.originalRound);
+        setCurrentRoundInputMode(tempGameState.originalMode);
+        setCurrentRoundBidsConfirmed(tempGameState.originalBidsConfirmed);
+        setTempGameState(null);
+      }
+      
+      console.log("Finished editing entries for the round.");
     } else {
-        setEditingPlayerId(nextPlayerId);
-        setIsPlayerValueUnderActiveEdit(false);
+      setEditingPlayerId(nextPlayerId);
+      setIsPlayerValueUnderActiveEdit(false);
     }
-  }, [isEditingCurrentRound, editingPlayerId, playerOrderForGame, firstBidderOfRoundId]);
+  }, [isEditingCurrentRound, editingPlayerId, playerOrderForGame, firstBidderOfRoundId, tempGameState, currentRoundForInput]);
 
   const handleSetActiveEditPlayerValue = useCallback((active: boolean) => {
     if (!isEditingCurrentRound || !editingPlayerId) return;
     setIsPlayerValueUnderActiveEdit(active);
   }, [isEditingCurrentRound, editingPlayerId]);
 
+  const handleEditSpecificRound = useCallback((roundNumber: number, mode: CurrentRoundInputMode) => {
+    if (roundNumber > currentRoundForInput || isEditingCurrentRound) {
+      return; // Can't edit future rounds or while already editing
+    }
+    
+    // Calculate the dealer for the specific round being edited
+    const firstDealerIndex = playerOrderForGame.indexOf(firstDealerPlayerId || "");
+    if (firstDealerIndex === -1 && playerOrderForGame.length > 0) {
+      console.error("First dealer not found in player order");
+      return;
+    }
+    
+    // Calculate dealer for the round being edited
+    const dealerIndexForRound = (firstDealerIndex + (roundNumber - 1)) % playerOrderForGame.length;
+    const dealerForRound = playerOrderForGame[dealerIndexForRound];
+    
+    // Calculate first bidder for the round (player after dealer)
+    const firstBidderIndexForRound = (dealerIndexForRound + 1) % playerOrderForGame.length;
+    const firstBidderForRound = playerOrderForGame[firstBidderIndexForRound];
+    
+    // Store the current game state to restore after editing
+    setTempGameState({
+      originalRound: currentRoundForInput,
+      originalMode: currentRoundInputMode,
+      originalBidsConfirmed: currentRoundBidsConfirmed
+    });
+    
+    // Set up the editing state
+    setCurrentRoundForInput(roundNumber);
+    setCurrentRoundInputMode(mode);
+    setCurrentDealerId(dealerForRound);
+    setFirstBidderOfRoundId(firstBidderForRound);
+    setIsEditingCurrentRound(true);
+    setEditingPlayerId(firstBidderForRound);
+    setIsPlayerValueUnderActiveEdit(false);
+    
+  }, [currentRoundForInput, currentRoundInputMode, currentRoundBidsConfirmed, isEditingCurrentRound, 
+      firstDealerPlayerId, playerOrderForGame]);
 
   if (gamePhase === 'SETUP') {
     return <PlayerSetupForm players={players} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onStartGame={handleStartGame} />;
@@ -545,6 +600,7 @@ export function GameManager() {
         onToggleEditMode={handleToggleEditMode}
         onKeepPlayerValue={handleKeepPlayerValue}
         onSetActiveEditPlayerValue={handleSetActiveEditPlayerValue}
+        onEditSpecificRound={handleEditSpecificRound}
       />
     );
   }

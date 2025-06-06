@@ -6,9 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCap
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode, ScoreInputTableProps } from '@/lib/types';
-import { RefreshCw, UserCheck, UserCog, Target, Flag, Award, Edit } from 'lucide-react';
+import { RefreshCw, UserCheck, UserCog, Target, Flag, Award, Edit, Edit2, MessageSquare, Hand } from 'lucide-react';
 import { NumberInputPad } from './number-input-pad';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export function ScoreInputTable({
   playersScoreData,
@@ -38,6 +39,7 @@ export function ScoreInputTable({
   onToggleEditMode,
   onKeepPlayerValue,
   onSetActiveEditPlayerValue,
+  onEditSpecificRound,
 }: ScoreInputTableProps) {
   const isDealerForRound = useCallback((
     playerId: string, 
@@ -535,7 +537,47 @@ export function ScoreInputTable({
                         ((isProblematicBidSum || isProblematicTakenSum) && (!isCurrentDisplayRound || (isCurrentDisplayRound && currentRoundBidsConfirmed && !isEditingCurrentRound ))) ? 'opacity-80 hover:opacity-100 bg-destructive/10' : '',
                         (isProblematicBidSum || isProblematicTakenSum) && (isCurrentDisplayRound && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && allBidsEnteredForHighlight && !isEditingCurrentRound) ? 'bg-destructive/10' : ''
                       )}>
-                        <TableCell className="font-medium text-xs px-0.5 py-0 text-center">{`${roundInfo.roundNumber}/${roundInfo.cardsDealt}`}</TableCell>
+                        <TableCell className="font-medium text-xs px-0.5 py-0 text-center">
+                          <div className="flex items-center justify-center gap-0.5">
+                            {`${roundInfo.roundNumber}/${roundInfo.cardsDealt}`}
+                            {gamePhase === 'SCORING' && 
+                              !isEditingCurrentRound && 
+                              roundInfo.roundNumber <= currentRoundForInput && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-4 w-4 p-0 opacity-70 hover:opacity-100" 
+                                    aria-label={`Edit round ${roundInfo.roundNumber}`}
+                                  >
+                                    <Edit2 className="h-2.5 w-2.5" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-2">
+                                  <div className="flex flex-col gap-1">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="flex items-center justify-start text-xs"
+                                      onClick={() => onEditSpecificRound && onEditSpecificRound(roundInfo.roundNumber, 'BIDDING')}
+                                    >
+                                      <MessageSquare className="h-3 w-3 mr-1" /> Edit Bids
+                                    </Button>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="flex items-center justify-start text-xs"
+                                      onClick={() => onEditSpecificRound && onEditSpecificRound(roundInfo.roundNumber, 'TAKING')}
+                                    >
+                                      <Hand className="h-3 w-3 mr-1" /> Edit Tricks
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            )}
+                          </div>
+                        </TableCell>
                         {playersScoreData.map(player => {
                           const scoreEntry = player.scores.find(s => s.roundNumber === roundInfo.roundNumber);
                           if (scoreEntry === undefined) {
