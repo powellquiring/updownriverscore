@@ -236,7 +236,7 @@ export function ScoreInputTable({
   
   let activeEditingPlayerName = "";
   let activeEditingPlayerCurrentValue: number | string = "N/A";
-  let disableKeepAndNextDueToRuleViolation = false;
+  // let disableKeepAndNextDueToRuleViolation = false;
 
   // Create a function to determine if Keep & Next button should be disabled
   const isKeepAndNextButtonDisabled = () => {
