@@ -238,6 +238,87 @@ export function ScoreInputTable({
   let activeEditingPlayerCurrentValue: number | string = "N/A";
   let disableKeepAndNextDueToRuleViolation = false;
 
+  // Create a function to determine if Keep & Next button should be disabled
+  const isKeepAndNextButtonDisabled = () => {
+    // If not in edit review mode, button should be enabled
+    if (isPlayerValueUnderActiveEdit || !editingPlayerId || !currentRoundConfig) {
+      return false;
+    }
+
+    if (currentRoundInputMode === 'BIDDING') {
+      // Only apply bidding validation for the dealer
+      if (editingPlayerId === currentDealerId) {
+        let sumOfBidsIfKept = 0;
+        playersScoreData.forEach(pData => {
+          const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
+          sumOfBidsIfKept += (currentRoundScoreEntry?.bid ?? 0);
+        });
+        
+        // Dealer's bid can't make the total equal to cards dealt
+        return sumOfBidsIfKept === currentRoundConfig.cardsDealt;
+      }
+      // For non-dealer players, always enable the button
+      return false;
+    } 
+    else if (currentRoundInputMode === 'TAKING') {
+      // For the first player, only check if their taken value exceeds cards dealt
+      if (editingPlayerId === firstBidderOfRoundId) {
+        const currentPlayerScoreEntry = playersScoreData
+          .find(pData => pData.playerId === editingPlayerId)
+          ?.scores.find(s => s.roundNumber === currentRoundForInput);
+        const currentPlayerTaken = currentPlayerScoreEntry?.taken ?? 0;
+        
+        // First player can take any number from 0 to cards dealt
+        return currentPlayerTaken > currentRoundConfig.cardsDealt;
+      }
+      
+      // For other players
+      const order = playerOrderForGame;
+      const startIndex = order.indexOf(firstBidderOfRoundId!);
+      const editingPlayerIndex = order.indexOf(editingPlayerId);
+      
+      if (startIndex === -1 || editingPlayerIndex === -1) {
+        return false; // If we can't determine player order, don't disable
+      }
+      
+      // Get current player's taken value
+      const currentPlayerScoreEntry = playersScoreData
+        .find(pData => pData.playerId === editingPlayerId)
+        ?.scores.find(s => s.roundNumber === currentRoundForInput);
+      const currentPlayerTaken = currentPlayerScoreEntry?.taken ?? 0;
+      
+      // Calculate sum of tricks taken by preceding players
+      let sumOfTakenByPrecedingPlayers = 0;
+      for (let i = 0; i < order.length; i++) {
+        const idx = (startIndex + i) % order.length;
+        const playerId = order[idx];
+        
+        // Stop when we reach the current player
+        if (playerId === editingPlayerId) {
+          break;
+        }
+        
+        const scoreEntry = playersScoreData
+          .find(pData => pData.playerId === playerId)
+          ?.scores.find(s => s.roundNumber === currentRoundForInput);
+        
+        sumOfTakenByPrecedingPlayers += (scoreEntry?.taken ?? 0);
+      }
+      
+      // For dealer: Total must equal cards dealt
+      if (editingPlayerId === currentDealerId) {
+        let sumOfTakenIfKept = sumOfTakenByPrecedingPlayers + currentPlayerTaken;
+        return sumOfTakenIfKept !== currentRoundConfig.cardsDealt;
+      }
+      // For non-dealer (except first player): Current player can't take more tricks than are available
+      else {
+        const availableTricks = currentRoundConfig.cardsDealt - sumOfTakenByPrecedingPlayers;
+        return currentPlayerTaken > availableTricks;
+      }
+    }
+    
+    return false; // Default to enabled
+  };
 
   if (gamePhase === 'SCORING' && currentRoundConfig) {
     if (isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode) {
@@ -277,6 +358,43 @@ export function ScoreInputTable({
             if (sumOfTakenIfKept !== currentRoundConfig.cardsDealt) {
                 disableKeepAndNextDueToRuleViolation = true;
             }
+        }
+      } else if (!isPlayerValueUnderActiveEdit && currentRoundInputMode === 'TAKING' && currentRoundConfig) {
+        // Check if current player's tricks plus preceding players would exceed cards dealt
+        const order = playerOrderForGame;
+        const startIndex = order.indexOf(firstBidderOfRoundId!);
+        const editingPlayerIndex = order.indexOf(editingPlayerId!);
+        
+        if (startIndex !== -1 && editingPlayerIndex !== -1) {
+          let sumOfTakenByPrecedingAndCurrentPlayer = 0;
+          
+          // Calculate sum of tricks taken by players who have already had their turn
+          for (let i = 0; i < order.length; i++) {
+            const currentIndexInOrder = (startIndex + i) % order.length;
+            const currentPlayerInSequenceId = order[currentIndexInOrder];
+            
+            // Include current player and all preceding players
+            if (currentPlayerInSequenceId === editingPlayerId || 
+                (editingPlayerIndex >= startIndex && currentIndexInOrder < editingPlayerIndex) ||
+                (editingPlayerIndex < startIndex && (currentIndexInOrder < editingPlayerIndex || currentIndexInOrder >= startIndex))) {
+              
+              const scoreEntry = playersScoreData
+                .find(pData => pData.playerId === currentPlayerInSequenceId)
+                ?.scores.find(s => s.roundNumber === currentRoundForInput);
+              
+              sumOfTakenByPrecedingAndCurrentPlayer += (scoreEntry?.taken ?? 0);
+            }
+          }
+          
+          // If remaining players can't possibly make valid selections, disable the button
+          const remainingPlayers = order.length - (editingPlayerIndex >= startIndex ? 
+            (editingPlayerIndex - startIndex + 1) : 
+            (order.length - startIndex + editingPlayerIndex + 1));
+          
+          if (sumOfTakenByPrecedingAndCurrentPlayer > currentRoundConfig.cardsDealt || 
+              (remainingPlayers > 0 && sumOfTakenByPrecedingAndCurrentPlayer === currentRoundConfig.cardsDealt)) {
+            disableKeepAndNextDueToRuleViolation = true;
+          }
         }
       }
     
@@ -544,7 +662,7 @@ export function ScoreInputTable({
                             variant="outline" 
                             size="sm"
                             className="px-2 sm:px-3 text-xs sm:text-sm"
-                            disabled={disableKeepAndNextDueToRuleViolation}
+                            disabled={isKeepAndNextButtonDisabled()}
                         >
                             Keep & Next
                         </Button>
