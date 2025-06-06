@@ -236,7 +236,6 @@ export function ScoreInputTable({
   
   let activeEditingPlayerName = "";
   let activeEditingPlayerCurrentValue: number | string = "N/A";
-  // let disableKeepAndNextDueToRuleViolation = false;
 
   // Create a function to determine if Keep & Next button should be disabled
   const isKeepAndNextButtonDisabled = () => {
@@ -346,18 +345,12 @@ export function ScoreInputTable({
                 const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
                 sumOfBidsIfKept += (currentRoundScoreEntry?.bid ?? 0);
             });
-            if (sumOfBidsIfKept === currentRoundConfig.cardsDealt) {
-                disableKeepAndNextDueToRuleViolation = true;
-            }
         } else if (currentRoundInputMode === 'TAKING') {
             let sumOfTakenIfKept = 0;
             playersScoreData.forEach(pData => {
                 const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
                 sumOfTakenIfKept += (currentRoundScoreEntry?.taken ?? 0);
             });
-            if (sumOfTakenIfKept !== currentRoundConfig.cardsDealt) {
-                disableKeepAndNextDueToRuleViolation = true;
-            }
         }
       } else if (!isPlayerValueUnderActiveEdit && currentRoundInputMode === 'TAKING' && currentRoundConfig) {
         // Check if current player's tricks plus preceding players would exceed cards dealt
@@ -390,11 +383,6 @@ export function ScoreInputTable({
           const remainingPlayers = order.length - (editingPlayerIndex >= startIndex ? 
             (editingPlayerIndex - startIndex + 1) : 
             (order.length - startIndex + editingPlayerIndex + 1));
-          
-          if (sumOfTakenByPrecedingAndCurrentPlayer > currentRoundConfig.cardsDealt || 
-              (remainingPlayers > 0 && sumOfTakenByPrecedingAndCurrentPlayer === currentRoundConfig.cardsDealt)) {
-            disableKeepAndNextDueToRuleViolation = true;
-          }
         }
       }
     
@@ -469,7 +457,7 @@ export function ScoreInputTable({
                     ) : (
                       <>
                         {player.name}
-                        {currentDealerId === player.playerId && gamePhase === 'SCORING' && <UserCog className="ml-0.5 h-2 w-2 sm:h-3 sm:w-3 inline text-primary-foreground/80" title="Dealer" />}
+                        {currentDealerId === player.playerId && gamePhase === 'SCORING' && <UserCog className="ml-0.5 h-2 w-2 sm:h-3 sm:w-3 inline text-primary-foreground/80" />}
                         {(isPlayerActiveForBiddingLive(player.playerId, currentRoundForInput) || isPlayerActiveForTakingLive(player.playerId, currentRoundForInput) || isPlayerActiveForEditingLive(player.playerId, currentRoundForInput)) && <Target className="ml-0.5 h-2 w-2 sm:h-3 sm:w-3 inline text-accent" title="Current Turn" />}
                       </>
                     )}
@@ -522,12 +510,16 @@ export function ScoreInputTable({
                         isCurrentDisplayRound && currentRoundInputMode === 'BIDDING' && !currentRoundBidsConfirmed && !isEditingCurrentRound ? 'bg-primary/10' : '',
                         isCurrentDisplayRound && currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed && !isEditingCurrentRound ? 'bg-secondary/10' : '',
                         isCurrentDisplayRound && isEditingCurrentRound ? 'bg-yellow-500/10' : '',
-                        ((isProblematicBidSum || isProblematicTakenSum) && (!isCurrentDisplayRound || gamePhase === 'RESULTS' || (isCurrentDisplayRound && currentRoundBidsConfirmed && !isEditingCurrentRound ))) ? 'opacity-80 hover:opacity-100 bg-destructive/10' : '',
+                        ((isProblematicBidSum || isProblematicTakenSum) && (!isCurrentDisplayRound || (isCurrentDisplayRound && currentRoundBidsConfirmed && !isEditingCurrentRound ))) ? 'opacity-80 hover:opacity-100 bg-destructive/10' : '',
                         (isProblematicBidSum || isProblematicTakenSum) && (isCurrentDisplayRound && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && allBidsEnteredForHighlight && !isEditingCurrentRound) ? 'bg-destructive/10' : ''
                       )}>
                         <TableCell className="font-medium text-xs px-0.5 py-0 text-center">{`${roundInfo.roundNumber}/${roundInfo.cardsDealt}`}</TableCell>
                         {playersScoreData.map(player => {
                           const scoreEntry = player.scores.find(s => s.roundNumber === roundInfo.roundNumber);
+                          if (scoreEntry === undefined) {
+                            console.error(`Error: Score entry not found for player ${player.playerId} in round ${roundInfo.roundNumber}`);
+                            return null;
+                          }
 
                           const isActiveForBidding = isPlayerActiveForBiddingLive(player.playerId, roundInfo.roundNumber);
                           const isActiveForTaking = isPlayerActiveForTakingLive(player.playerId, roundInfo.roundNumber);
@@ -552,7 +544,7 @@ export function ScoreInputTable({
                                             B:
                                             <span className={cn(bidText === '-' ? "text-muted-foreground" : "", bidText !== '-' && "px-0.5")}>{bidText}</span>
                                             {takenText !== '-' && <span>/T:<span className={cn(takenText !== '-' && "px-0.5")}>{takenText}</span></span>}
-                                            <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
+                                            <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" />
                                         </span>
                                     )}
                                     {(isActiveForTaking || (isActiveForEditing && currentRoundInputMode === 'TAKING')) && !isActiveForBidding && !(isActiveForEditing && currentRoundInputMode === 'BIDDING') && (
@@ -560,7 +552,7 @@ export function ScoreInputTable({
                                             <span className={cn(bidText === '-' ? "text-muted-foreground" : "", bidText !== '-' && "px-0.5")}>{bidText}</span>
                                             <span>/T:</span>
                                             <span className={cn(takenText === '-' ? "text-muted-foreground" : "", takenText !== '-' && "px-0.5")}>{takenText}</span>
-                                            <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5" title="Your Turn" />
+                                            <Target className="h-2 w-2 sm:h-3 sm:w-3 text-accent ml-0.5"/>
                                         </span>
                                     )}
                                     {!isActiveForBidding && !isActiveForTaking && !isActiveForEditing && (
