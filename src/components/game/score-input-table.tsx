@@ -193,7 +193,6 @@ export function ScoreInputTable({
 
 
   const getHeaderTitle = () => {
-    if (gamePhase === 'RESULTS') return "Game Over - Final Scores";
     if (gamePhase === 'DEALER_SELECTION') return "Select First Dealer";
     if (gamePhase === 'SCORING' && currentRoundConfig) {
       let phaseText = '';
@@ -238,13 +237,10 @@ export function ScoreInputTable({
   const isPlayerActiveForEditingLive = (playerId: string, roundNumber: number) => gamePhase === 'SCORING' && isEditingCurrentRound && isPlayerValueUnderActiveEdit && playerId === editingPlayerId && roundNumber === currentRoundForInput;
 
 
-  const sortedPlayersForResults = gamePhase === 'RESULTS'
-    ? [...playersScoreData].sort((a, b) => b.totalScore - a.totalScore)
-    : playersScoreData;
+  const sortedPlayersForDisplay = [...playersScoreData].sort((a, b) => b.totalScore - a.totalScore);
 
   const getPlayerRank = (playerId: string): number => {
-    if (gamePhase !== 'RESULTS') return -1;
-    const playerList = sortedPlayersForResults;
+    const playerList = sortedPlayersForDisplay;
     return playerList.findIndex(p => p.playerId === playerId);
   };
 
@@ -343,6 +339,15 @@ export function ScoreInputTable({
     return false; // Default to enabled
   };
 
+  const getNextDealerName = useCallback(() => {
+    if (!currentDealerId || playerOrderForGame.length === 0) return "";
+    const currentDealerIndex = playerOrderForGame.indexOf(currentDealerId);
+    if (currentDealerIndex === -1) return "";
+    const nextDealerIndex = (currentDealerIndex + 1) % playerOrderForGame.length;
+    const nextDealerId = playerOrderForGame[nextDealerIndex];
+    return allPlayers.find(p => p.id === nextDealerId)?.name || "";
+  }, [currentDealerId, playerOrderForGame, allPlayers]);
+
   if (gamePhase === 'SCORING' && currentRoundConfig) {
     if (isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode) {
       numPadDisabledGlobally = !isPlayerValueUnderActiveEdit; // Numpad only active when isPlayerValueUnderActiveEdit is true
@@ -431,9 +436,10 @@ export function ScoreInputTable({
         numPadDisabledGlobally = true;
     } else if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) { 
         showAdvanceRoundButton = true;
+        const nextDealerName = getNextDealerName();
         mainActionButtonText = currentRoundForInput < gameRounds.length 
-            ? `Deal ${gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || ''} cards` 
-            : "Show Final Scores";
+            ? `Deal ${gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || ''} cards (D: ${nextDealerName})` 
+            : "Game Complete";
         numPadActionText = ""; 
         numPadDisabledGlobally = true;
     } else { 
@@ -660,23 +666,32 @@ export function ScoreInputTable({
                 <TableFooter>
                   <TableRow className="bg-card border-t-2 border-primary">
                     <TableCell className="font-bold text-xs sm:text-sm text-right px-0.5 py-0.5">Total</TableCell>
-                    {sortedPlayersForResults.map(player => {
+                    {sortedPlayersForDisplay.map(player => {
                       const rank = getPlayerRank(player.playerId);
                       let rankStyle = "text-primary-foreground";
                       let awardIcon = null;
-                      if (gamePhase === 'RESULTS') {
-                          if (rank === 0) { rankStyle = "text-yellow-500 font-bold border border-yellow-400 bg-yellow-500/10 rounded"; awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-yellow-500" />; }
-                          else if (rank === 1) { rankStyle = "text-slate-400 font-semibold"; awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-slate-400" />; }
-                          else if (rank === 2) { rankStyle = "text-orange-400 font-semibold"; awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-orange-400" />; }
+                      
+                      if (rank === 0) { 
+                        rankStyle = "text-yellow-500 font-bold border border-yellow-400 bg-yellow-500/10 rounded"; 
+                        awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-yellow-500" />; 
                       }
+                      else if (rank === 1) { 
+                        rankStyle = "text-slate-400 font-semibold"; 
+                        awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-slate-400" />; 
+                      }
+                      else if (rank === 2) { 
+                        rankStyle = "text-orange-400 font-semibold"; 
+                        awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-orange-400" />; 
+                      }
+                      
                       return (
                         <TableCell
-                            key={`total-${player.playerId}`}
-                            className={cn(
-                                "text-center font-bold text-xs sm:text-sm p-0.5",
-                                rankStyle,
-                                player.playerId === activePlayerIdForColumnHighlight && gamePhase === 'SCORING' && "bg-secondary/30"
-                            )}
+                          key={`total-${player.playerId}`}
+                          className={cn(
+                            "text-center font-bold text-xs sm:text-sm p-0.5",
+                            rankStyle,
+                            player.playerId === activePlayerIdForColumnHighlight && gamePhase === 'SCORING' && "bg-secondary/30"
+                          )}
                         >
                           {player.totalScore} {awardIcon}
                         </TableCell>
@@ -780,24 +795,9 @@ export function ScoreInputTable({
 
       {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (
         <div className="px-1 md:px-0 mt-2 pb-2 flex flex-row justify-between items-center gap-1 md:gap-2">
-          <Button onClick={onRestartGame} variant="outline" size="sm" className="w-auto max-w-[calc(50%-0.25rem)] md:max-w-[33vw] text-xs">
-            <RefreshCw className="mr-1 h-3 w-3" /> {gamePhase === 'RESULTS' ? "Play New Game" : "Restart Game"}
+          <Button onClick={onRestartGame} variant="outline" size="sm" className="w-full max-w-full md:max-w-[33vw] text-xs">
+            <RefreshCw className="mr-1 h-3 w-3" /> Restart Game
           </Button>
-
-          {gamePhase === 'SCORING' && !isEditingCurrentRound && ( 
-            <Button
-                onClick={onFinishGame}
-                variant="destructive"
-                size="sm"
-                className="w-auto max-w-[calc(50%-0.25rem)] md:max-w-[33vw] text-xs"
-                disabled={
-                    (currentRoundInputMode === 'BIDDING' && !!currentPlayerBiddingId) ||
-                    (currentRoundInputMode === 'TAKING' && !!currentPlayerTakingId && currentRoundBidsConfirmed)
-                }
-            >
-                <Flag className="mr-1 h-3 w-3" /> Finish Early
-            </Button>
-          )}
         </div>
       )}
       {gamePhase === 'DEALER_SELECTION' && (

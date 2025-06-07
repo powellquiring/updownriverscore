@@ -297,8 +297,8 @@ export function GameManager() {
 
   const handleAdvanceRoundOrEndGame = useCallback(() => {
     if (isEditingCurrentRound) {
-        console.warn("Finish or cancel editing before advancing round.");
-        return;
+      console.warn("Finish or cancel editing before advancing round.");
+      return;
     }
     if (currentRoundForInput < gameRounds.length) {
       const newRoundNumber = currentRoundForInput + 1;
@@ -319,12 +319,12 @@ export function GameManager() {
       
       console.log(`Starting Round ${newRoundNumber}.`);
     } else { 
-      setGamePhase('RESULTS');
+      // Game is complete but we stay in SCORING phase
       setCurrentPlayerBiddingId(null);
       setCurrentPlayerTakingId(null);
       setCurrentRoundInputMode('BIDDING'); 
       setCurrentRoundBidsConfirmed(false);
-      console.log("Game Finished! All rounds completed. Final scores are displayed below.");
+      console.log("Game Finished! All rounds completed. Final scores are displayed.");
     }
   }, [currentRoundForInput, gameRounds, playerOrderForGame, currentDealerId, isEditingCurrentRound]);
 
@@ -419,37 +419,12 @@ export function GameManager() {
     playerOrderForGame, firstBidderOfRoundId, playersScoreData, isEditingCurrentRound, editingPlayerId, currentDealerId
   ]);
 
+  // Add a dummy function to replace handleFinishGameEarly
   const handleFinishGameEarly = useCallback(() => {
-    if (isEditingCurrentRound) {
-        console.warn("Finish or cancel editing before finishing game early.");
-        return;
-    }
-    if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId !== null && gamePhase === 'SCORING') {
-         console.warn("Complete bidding for the current player first.");
-         return;
-    }
-    if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId === null && !currentRoundBidsConfirmed && gamePhase === 'SCORING') {
-      console.warn("Please confirm bids for the current round first.");
-      return;
-    }
-    if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId !== null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
-        console.warn("Complete tricks taken entries for the current player first.");
-        return;
-    }
-     if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null && currentRoundBidsConfirmed && gamePhase === 'SCORING') {
-        console.warn("Please confirm completion of the current round's tricks first.");
-        return;
-    }
-    
-    setGamePhase('RESULTS');
-    setCurrentPlayerBiddingId(null);
-    setCurrentPlayerTakingId(null);
-    setCurrentRoundInputMode('BIDDING');
-    setCurrentRoundBidsConfirmed(false);
-    setIsEditingCurrentRound(false); setEditingPlayerId(null); setIsPlayerValueUnderActiveEdit(false);
-    console.log("Game Finished Early! Displaying current scores.");
-  }, [currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, currentRoundBidsConfirmed, gamePhase, isEditingCurrentRound]);
-
+    // This is a placeholder function that does nothing
+    // We keep it to avoid breaking the interface with ScoreInputTable
+    console.log("Finish game early functionality has been removed");
+  }, []);
 
   // Handlers for "Edit Entries" mode
   const handleToggleEditMode = useCallback(() => {
@@ -553,22 +528,19 @@ export function GameManager() {
     return <PlayerSetupForm players={players} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onStartGame={handleStartGame} />;
   }
 
-  if ((gamePhase === 'DEALER_SELECTION' || gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (gameRounds.length > 0 || gamePhase === 'DEALER_SELECTION' || (gamePhase === 'RESULTS' && playersScoreData.length > 0) )) {
+  if ((gamePhase === 'DEALER_SELECTION' || gamePhase === 'SCORING') && (gameRounds.length > 0 || gamePhase === 'DEALER_SELECTION')) {
     const activePlayersScoreData = playersScoreData.length > 0 ? playersScoreData : players.map(p => ({
-        playerId: p.id, name: p.name, 
-        scores: gameRounds.map(r => ({ roundNumber: r.roundNumber, bid: null, taken: null, roundScore: 0})), 
-        totalScore: 0
+      playerId: p.id, name: p.name, 
+      scores: gameRounds.map(r => ({ roundNumber: r.roundNumber, bid: null, taken: null, roundScore: 0})), 
+      totalScore: 0
     }));
 
     let currentRoundInfo = gameRounds.find(r => r.roundNumber === currentRoundForInput);
-    if (gamePhase === 'RESULTS' && gameRounds.length > 0) { 
-        currentRoundInfo = gameRounds[gameRounds.length - 1]; 
-    }
     
     if (!currentRoundInfo && gamePhase === 'SCORING' && gameRounds.length > 0) { 
-        console.error("Error: Could not find current round info. Game state might be corrupted.");
-        handlePlayAgain(); 
-        return <p>Error loading round data. Resetting game to setup...</p>; 
+      console.error("Error: Could not find current round info. Game state might be corrupted.");
+      handlePlayAgain(); 
+      return <p>Error loading round data. Resetting game to setup...</p>; 
     }
 
     return (
@@ -590,7 +562,7 @@ export function GameManager() {
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}
         onAdvanceRoundOrEndGame={handleAdvanceRoundOrEndGame}
-        onFinishGame={handleFinishGameEarly}
+        onFinishGame={handleFinishGameEarly} // Now using the placeholder function
         onRestartGame={handlePlayAgain}
         onSelectDealer={handleSelectDealer}
         // Pass new state and handlers for edit mode
