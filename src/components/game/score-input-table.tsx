@@ -133,7 +133,7 @@ export function ScoreInputTable({
           const currentPlayerInSequenceId = order[currentIndexInOrder];
 
           if (currentPlayerInSequenceId === playerWhosePadIsBeingConfigured) {
-            break;
+            break; 
           }
 
           const scoreEntry = playersScoreData
@@ -144,9 +144,10 @@ export function ScoreInputTable({
         }
       } else {
         console.error("getIsTakenInvalid: firstBidderOfRoundId not found for non-dealer validation.");
-        return () => true;
+        return () => true; 
       }
     }
+
 
     return (num_on_pad: number) => {
         if (num_on_pad < 0 || num_on_pad > cardsDealt) return true;
@@ -182,32 +183,72 @@ export function ScoreInputTable({
 
 
   const getHeaderTitle = () => {
-    if (gamePhase === 'DEALER_SELECTION') return "Select First Dealer";
-    if (gamePhase === 'SCORING' && currentRoundConfig) {
-      let phaseText = '';
-      if (isEditingCurrentRound && editingPlayerId) {
-        const playerBeingEditedName = allPlayers.find(p=>p.id === editingPlayerId)?.name || "Player";
-        const editAction = isPlayerValueUnderActiveEdit ? "Editing" : "Reviewing";
-        const editType = currentRoundInputMode === 'BIDDING' ? "Bid" : "Tricks";
-        phaseText = `${editAction} ${editType} for ${playerBeingEditedName}`;
-      } else if (currentRoundInputMode === 'BIDDING') {
-        if (currentPlayerBiddingId) {
-            phaseText = `Bidding: ${currentPlayerActiveName}'s turn`;
-        } else if (!currentRoundBidsConfirmed) {
-             phaseText = 'All Bids In! Ready for Tricks or Edit Entries.';
-        }
-      } else if (currentRoundInputMode === 'TAKING' && currentRoundBidsConfirmed) {
-          if (currentPlayerTakingId) {
-            phaseText = `Taking: ${currentPlayerActiveName}'s turn`;
-          } else {
-             phaseText = `All Tricks In! Ready for Next Round or Edit Entries.`;
-          }
-      }
-      const dealerInfo = currentDealerName ? `(D: ${currentDealerName})` : '';
-      return `Scores - R${currentRoundForInput}/${gameRounds.length} (C:${currentRoundConfig.cardsDealt}) ${dealerInfo} - ${phaseText}`;
+    if (gamePhase === 'DEALER_SELECTION') {
+      return "Select First Dealer";
     }
-    return "Score Sheet";
-  }
+
+    if (gamePhase === 'SCORING') {
+      if (currentRoundForInput > gameRounds.length && gameRounds.length > 0) {
+        return "Final Scores"; // Game over state
+      }
+
+      if (!currentRoundConfig) {
+        return "Loading Round..."; // Should be transient
+      }
+
+      const cardsDealt = currentRoundConfig.cardsDealt;
+
+      if (isEditingCurrentRound && editingPlayerId) {
+        const playerBeingEditedName = allPlayers.find(p => p.id === editingPlayerId)?.name || "Player";
+        const editType = currentRoundInputMode === 'BIDDING' ? "Bid" : "Tricks";
+        const scoreEntry = playersScoreData.find(p => p.playerId === editingPlayerId)
+          ?.scores.find(s => s.roundNumber === currentRoundForInput);
+        const currentValue = currentRoundInputMode === 'BIDDING' ? scoreEntry?.bid : scoreEntry?.taken;
+        return `Editing ${editType} for ${playerBeingEditedName} - ${cardsDealt} cards / ${currentValue ?? '-'}`;
+      }
+
+      // Live input mode
+      if (currentRoundInputMode === 'BIDDING') {
+        if (currentPlayerBiddingId) {
+          const scoreEntry = playersScoreData.find(p => p.playerId === currentPlayerBiddingId)
+            ?.scores.find(s => s.roundNumber === currentRoundForInput);
+          const currentValue = scoreEntry?.bid;
+          return `Bidding: ${currentPlayerActiveName} - ${cardsDealt} cards / ${currentValue ?? '-'}`;
+        } else if (!currentRoundBidsConfirmed) { // All bids are in
+          return `Bids Complete - ${cardsDealt} cards. Ready for Tricks.`;
+        }
+      } else if (currentRoundInputMode === 'TAKING') {
+        if (currentPlayerTakingId) {
+          const scoreEntry = playersScoreData.find(p => p.playerId === currentPlayerTakingId)
+            ?.scores.find(s => s.roundNumber === currentRoundForInput);
+          const currentValue = scoreEntry?.taken;
+          return `Taking: ${currentPlayerActiveName} - ${cardsDealt} cards / ${currentValue ?? '-'}`;
+        } else if (currentRoundBidsConfirmed) { // All tricks are in
+          const isLastRound = currentRoundForInput === gameRounds.length;
+          const nextActionText = isLastRound ? "Show Final Scores." : "Ready for Next Round.";
+          return `Tricks Complete - ${cardsDealt} cards. ${nextActionText}`;
+        }
+      }
+      
+      // Fallback for SCORING phase if no specific state matches above.
+      // This typically covers the state where bids are all in but not yet confirmed to move to 'TAKING'.
+      if (currentRoundInputMode === 'BIDDING' && !currentPlayerBiddingId && !currentRoundBidsConfirmed) {
+          return `Bids Complete - ${cardsDealt} cards. Ready for Tricks.`;
+      }
+      // Or when tricks are all in but not yet advanced to next round/game end.
+      if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) {
+          const isLastRound = currentRoundForInput === gameRounds.length;
+          const nextActionText = isLastRound ? "Show Final Scores." : "Ready for Next Round.";
+          return `Tricks Complete - ${cardsDealt} cards. ${nextActionText}`;
+      }
+
+      // A generic title if somehow none of the above states are met during SCORING
+      return `Round ${currentRoundForInput} (${cardsDealt} cards)`;
+    }
+
+    return "Score Sheet"; // Absolute fallback if not in DEALER_SELECTION or SCORING
+  };
+
 
   const getTableCaption = () => {
     if (currentRoundForInput > gameRounds.length && gameRounds.length > 0) return "Game Over! Final scores are displayed. Press 'Restart Game' to play again.";
@@ -578,7 +619,7 @@ export function ScoreInputTable({
 
                 <div id="action-button-or-numpad-container" className={cn(
                     (showConfirmBidsButton || showAdvanceRoundButton || (isEditingCurrentRound && !isPlayerValueUnderActiveEdit))
-                        ? 'w-full'
+                        ? 'w-full' 
                         : 'flex flex-col items-start w-full md:w-auto'
                 )}>
                     {(showConfirmBidsButton && onConfirmBidsForRound) || (showAdvanceRoundButton && onAdvanceRoundOrEndGame) ? (
@@ -687,3 +728,4 @@ export function ScoreInputTable({
     </Card>
   );
 }
+
