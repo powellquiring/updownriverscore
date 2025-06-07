@@ -67,7 +67,7 @@ export function ScoreInputTable({
   const currentRoundConfig = gameRounds.find(r => r.roundNumber === currentRoundForInput);
   const playersForDisplay = gamePhase === 'DEALER_SELECTION' ? allPlayers.map(p => ({ ...p, playerId: p.id, name: p.name, scores: [], totalScore: 0 })) : playersScoreData;
 
-  const isGameReallyOver = gamePhase === 'RESULTS';
+  const isGameReallyOver = gamePhase === 'RESULTS'; // This might be redundant now, consider removing
 
   const getIsBidInvalid = useCallback((
     roundConfigForCheck: GameRoundInfo | undefined,
@@ -126,43 +126,36 @@ export function ScoreInputTable({
     }
 
     // For non-dealer players:
+    let sumOfTakenByPrecedingPlayersInTurnOrder = 0;
+    if (playerWhosePadIsBeingConfigured !== firstBidderOfRoundId) { // Only calculate if not the first player
+        const order = playerOrderForGame;
+        const startIndex = order.indexOf(firstBidderOfRoundId);
+
+        if (startIndex === -1) {
+            console.error("getIsTakenInvalid: firstBidderOfRoundId not found in playerOrderForGame for non-dealer validation.");
+            return () => true; // Should not happen, but safer to make all invalid if state is broken
+        }
+
+        for (let i = 0; i < order.length; i++) {
+            const currentIndexInOrder = (startIndex + i) % order.length;
+            const currentPlayerInSequenceId = order[currentIndexInOrder];
+
+            if (currentPlayerInSequenceId === playerWhosePadIsBeingConfigured) {
+                break; // Stop summing once we reach the player whose input is being validated
+            }
+            
+            const scoreEntry = playersScoreData
+                .find(pData => pData.playerId === currentPlayerInSequenceId)
+                ?.scores.find(s => s.roundNumber === roundNumForCheck);
+            
+            sumOfTakenByPrecedingPlayersInTurnOrder += (scoreEntry?.taken ?? 0);
+        }
+    }
+    
     return (num_on_pad: number) => {
         if (num_on_pad < 0 || num_on_pad > cardsDealt) return true;
-
-        let sumOfTakenByPrecedingPlayersInTurnOrder = 0;
-        
-        if (playerWhosePadIsBeingConfigured !== firstBidderOfRoundId) {
-            const order = playerOrderForGame;
-            const startIndex = order.indexOf(firstBidderOfRoundId); 
-
-            if (startIndex === -1) { 
-                console.error("getIsTakenInvalid: firstBidderOfRoundId not found in playerOrderForGame for non-dealer validation.");
-                return true; 
-            }
-
-            for (let i = 0; i < order.length; i++) {
-                const currentIndexInOrder = (startIndex + i) % order.length;
-                const currentPlayerInSequenceId = order[currentIndexInOrder];
-
-                if (currentPlayerInSequenceId === playerWhosePadIsBeingConfigured) {
-                    break; 
-                }
-                
-                const scoreEntry = playersScoreData
-                    .find(pData => pData.playerId === currentPlayerInSequenceId)
-                    ?.scores.find(s => s.roundNumber === roundNumForCheck);
-                
-                sumOfTakenByPrecedingPlayersInTurnOrder += (scoreEntry?.taken ?? 0);
-            }
-        }
-
         const totalIfCurrentPlayerTakesNumOnPad = sumOfTakenByPrecedingPlayersInTurnOrder + num_on_pad;
-
-        if (totalIfCurrentPlayerTakesNumOnPad > cardsDealt) {
-           return true; 
-        }
-
-        return false; 
+        return totalIfCurrentPlayerTakesNumOnPad > cardsDealt;
     };
   }, [playersScoreData, playerOrderForGame, currentDealerId, firstBidderOfRoundId]);
 
@@ -187,7 +180,7 @@ export function ScoreInputTable({
 
   if (gamePhase === 'SCORING' && !currentRoundConfig && gameRounds.length > 0 && currentRoundForInput <= gameRounds.length ) return <p>Loading round configuration...</p>;
 
-  const roundsToDisplay = (isGameReallyOver || currentRoundForInput > gameRounds.length) && gameRounds.length > 0
+  const roundsToDisplay = (currentRoundForInput > gameRounds.length && gameRounds.length > 0) // Check if game is over based on round progression
     ? gameRounds
     : gameRounds.filter(roundInfo => roundInfo.roundNumber <= currentRoundForInput);
 
@@ -221,7 +214,7 @@ export function ScoreInputTable({
   }
 
   const getTableCaption = () => {
-    if (gamePhase === 'RESULTS') return "Game Over! Final scores are displayed. Press 'Play New Game' to start again.";
+    if (currentRoundForInput > gameRounds.length && gameRounds.length > 0) return "Game Over! Final scores are displayed. Press 'Restart Game' to play again.";
     if (gamePhase === 'DEALER_SELECTION') return "Click player's name to select as first dealer.";
     if (gamePhase === 'SCORING') {
       if (isEditingCurrentRound && !isPlayerValueUnderActiveEdit && editingPlayerId) {
@@ -247,96 +240,38 @@ export function ScoreInputTable({
   let numPadCurrentValue: number | null = null;
   let numPadIsInvalidFn: ((num: number) => boolean) | undefined = undefined;
   let numPadActionText = "";
-  let numPadPlayerName = ""; // Declare numPadPlayerName here
+  let numPadPlayerName = "";
   let numPadDisabledGlobally = true; 
   
   let showConfirmBidsButton = false;
   let showAdvanceRoundButton = false;
-  let mainActionButtonText = ""; // For "Enter Tricks" or "Deal X Cards"
+  let mainActionButtonText = ""; 
   
   let activeEditingPlayerName = "";
   let activeEditingPlayerCurrentValue: number | string = "N/A";
 
-  // Create a function to determine if Keep & Next button should be disabled
-  const isKeepAndNextButtonDisabled = () => {
-    // If not in edit review mode, button should be enabled
-    if (isPlayerValueUnderActiveEdit || !editingPlayerId || !currentRoundConfig) {
-      return false;
+  const disableKeepAndNextDueToRuleViolation = (): boolean => {
+    if (!isEditingCurrentRound || isPlayerValueUnderActiveEdit || !editingPlayerId || !currentRoundConfig) {
+      return false; 
     }
 
-    if (currentRoundInputMode === 'BIDDING') {
-      // Only apply bidding validation for the dealer
-      if (editingPlayerId === currentDealerId) {
-        let sumOfBidsIfKept = 0;
-        playersScoreData.forEach(pData => {
-          const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
-          sumOfBidsIfKept += (currentRoundScoreEntry?.bid ?? 0);
-        });
-        
-        // Dealer's bid can't make the total equal to cards dealt
-        return sumOfBidsIfKept === currentRoundConfig.cardsDealt;
-      }
-      // For non-dealer players, always enable the button
-      return false;
+    if (currentRoundInputMode === 'BIDDING' && editingPlayerId === currentDealerId) {
+      let sumOfBidsIfKept = 0;
+      playersScoreData.forEach(pData => {
+        const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
+        sumOfBidsIfKept += (currentRoundScoreEntry?.bid ?? 0);
+      });
+      return sumOfBidsIfKept === currentRoundConfig.cardsDealt;
     } 
-    else if (currentRoundInputMode === 'TAKING') {
-      // For the first player, only check if their taken value exceeds cards dealt
-      if (editingPlayerId === firstBidderOfRoundId) {
-        const currentPlayerScoreEntry = playersScoreData
-          .find(pData => pData.playerId === editingPlayerId)
-          ?.scores.find(s => s.roundNumber === currentRoundForInput);
-        const currentPlayerTaken = currentPlayerScoreEntry?.taken ?? 0;
-        
-        // First player can take any number from 0 to cards dealt
-        return currentPlayerTaken > currentRoundConfig.cardsDealt;
-      }
-      
-      // For other players
-      const order = playerOrderForGame;
-      const startIndex = order.indexOf(firstBidderOfRoundId!);
-      const editingPlayerIndex = order.indexOf(editingPlayerId);
-      
-      if (startIndex === -1 || editingPlayerIndex === -1) {
-        return false; // If we can't determine player order, don't disable
-      }
-      
-      // Get current player's taken value
-      const currentPlayerScoreEntry = playersScoreData
-        .find(pData => pData.playerId === editingPlayerId)
-        ?.scores.find(s => s.roundNumber === currentRoundForInput);
-      const currentPlayerTaken = currentPlayerScoreEntry?.taken ?? 0;
-      
-      // Calculate sum of tricks taken by preceding players
-      let sumOfTakenByPrecedingPlayers = 0;
-      for (let i = 0; i < order.length; i++) {
-        const idx = (startIndex + i) % order.length;
-        const playerId = order[idx];
-        
-        // Stop when we reach the current player
-        if (playerId === editingPlayerId) {
-          break;
-        }
-        
-        const scoreEntry = playersScoreData
-          .find(pData => pData.playerId === playerId)
-          ?.scores.find(s => s.roundNumber === currentRoundForInput);
-        
-        sumOfTakenByPrecedingPlayers += (scoreEntry?.taken ?? 0);
-      }
-      
-      // For dealer: Total must equal cards dealt
-      if (editingPlayerId === currentDealerId) {
-        let sumOfTakenIfKept = sumOfTakenByPrecedingPlayers + currentPlayerTaken;
-        return sumOfTakenIfKept !== currentRoundConfig.cardsDealt;
-      }
-      // For non-dealer (except first player): Current player can't take more tricks than are available
-      else {
-        const availableTricks = currentRoundConfig.cardsDealt - sumOfTakenByPrecedingPlayers;
-        return currentPlayerTaken > availableTricks;
-      }
+    else if (currentRoundInputMode === 'TAKING' && editingPlayerId === currentDealerId) {
+      let sumOfTakenIfKept = 0;
+      playersScoreData.forEach(pData => {
+          const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
+          sumOfTakenIfKept += (currentRoundScoreEntry?.taken ?? 0);
+      });
+      return sumOfTakenIfKept !== currentRoundConfig.cardsDealt;
     }
-    
-    return false; // Default to enabled
+    return false;
   };
 
   const getNextDealerName = useCallback(() => {
@@ -350,7 +285,7 @@ export function ScoreInputTable({
 
   if (gamePhase === 'SCORING' && currentRoundConfig) {
     if (isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode) {
-      numPadDisabledGlobally = !isPlayerValueUnderActiveEdit; // Numpad only active when isPlayerValueUnderActiveEdit is true
+      numPadDisabledGlobally = !isPlayerValueUnderActiveEdit; 
       const player = playersScoreData.find(p => p.playerId === editingPlayerId);
       activeEditingPlayerName = allPlayers.find(p => p.id === editingPlayerId)?.name || "";
       const scoreEntry = player?.scores.find(s => s.roundNumber === currentRoundForInput);
@@ -360,59 +295,11 @@ export function ScoreInputTable({
         numPadActionText = `Editing Bid for ${activeEditingPlayerName}`;
         numPadCurrentValue = scoreEntry?.bid ?? null;
         numPadIsInvalidFn = getIsBidInvalid(currentRoundConfig, editingPlayerId);
-      } else { // TAKING mode
+      } else { 
         activeEditingPlayerCurrentValue = scoreEntry?.taken ?? 'N/A';
         numPadActionText = `Editing Tricks for ${activeEditingPlayerName}`;
         numPadCurrentValue = scoreEntry?.taken ?? null;
         numPadIsInvalidFn = getIsTakenInvalid(currentRoundConfig, editingPlayerId);
-      }
-      
-      if (!isPlayerValueUnderActiveEdit && editingPlayerId === currentDealerId && currentRoundConfig) {
-        if (currentRoundInputMode === 'BIDDING') {
-            let sumOfBidsIfKept = 0;
-            playersScoreData.forEach(pData => {
-                const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
-                sumOfBidsIfKept += (currentRoundScoreEntry?.bid ?? 0);
-            });
-        } else if (currentRoundInputMode === 'TAKING') {
-            let sumOfTakenIfKept = 0;
-            playersScoreData.forEach(pData => {
-                const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
-                sumOfTakenIfKept += (currentRoundScoreEntry?.taken ?? 0);
-            });
-        }
-      } else if (!isPlayerValueUnderActiveEdit && currentRoundInputMode === 'TAKING' && currentRoundConfig) {
-        // Check if current player's tricks plus preceding players would exceed cards dealt
-        const order = playerOrderForGame;
-        const startIndex = order.indexOf(firstBidderOfRoundId!);
-        const editingPlayerIndex = order.indexOf(editingPlayerId!);
-        
-        if (startIndex !== -1 && editingPlayerIndex !== -1) {
-          let sumOfTakenByPrecedingAndCurrentPlayer = 0;
-          
-          // Calculate sum of tricks taken by players who have already had their turn
-          for (let i = 0; i < order.length; i++) {
-            const currentIndexInOrder = (startIndex + i) % order.length;
-            const currentPlayerInSequenceId = order[currentIndexInOrder];
-            
-            // Include current player and all preceding players
-            if (currentPlayerInSequenceId === editingPlayerId || 
-                (editingPlayerIndex >= startIndex && currentIndexInOrder < editingPlayerIndex) ||
-                (editingPlayerIndex < startIndex && (currentIndexInOrder < editingPlayerIndex || currentIndexInOrder >= startIndex))) {
-              
-              const scoreEntry = playersScoreData
-                .find(pData => pData.playerId === currentPlayerInSequenceId)
-                ?.scores.find(s => s.roundNumber === currentRoundForInput);
-              
-              sumOfTakenByPrecedingAndCurrentPlayer += (scoreEntry?.taken ?? 0);
-            }
-          }
-          
-          // If remaining players can't possibly make valid selections, disable the button
-          const remainingPlayers = order.length - (editingPlayerIndex >= startIndex ? 
-            (editingPlayerIndex - startIndex + 1) : 
-            (order.length - startIndex + editingPlayerIndex + 1));
-        }
       }
     
     } else if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId) { 
@@ -439,7 +326,7 @@ export function ScoreInputTable({
         const nextDealerName = getNextDealerName();
         mainActionButtonText = currentRoundForInput < gameRounds.length 
             ? `Deal ${gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || ''} cards (D: ${nextDealerName})` 
-            : "Game Complete";
+            : "Show Final Scores";
         numPadActionText = ""; 
         numPadDisabledGlobally = true;
     } else { 
@@ -494,7 +381,7 @@ export function ScoreInputTable({
                   </TableHead>
                 ))}
               </TableRow>
-               {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && playersScoreData.length > 0 && (
+               {(gamePhase === 'SCORING' || (currentRoundForInput > gameRounds.length && gameRounds.length > 0)) && playersScoreData.length > 0 && (
                  <TableRow className="border-b-0">
                     <TableHead
                         colSpan={1 + playersScoreData.length}
@@ -508,7 +395,7 @@ export function ScoreInputTable({
                 </TableRow>
               )}
             </TableHeader>
-            {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (gameRounds.length > 0 || playersScoreData.length > 0 ) && (
+            {(gamePhase === 'SCORING' || (currentRoundForInput > gameRounds.length && gameRounds.length > 0)) && (gameRounds.length > 0 || playersScoreData.length > 0 ) && (
               <>
                 <TableBody>
                   {roundsToDisplay.map((roundInfo) => {
@@ -544,11 +431,13 @@ export function ScoreInputTable({
                         (isProblematicBidSum || isProblematicTakenSum) && (isCurrentDisplayRound && !currentRoundBidsConfirmed && currentRoundInputMode === 'BIDDING' && allBidsEnteredForHighlight && !isEditingCurrentRound) ? 'bg-destructive/10' : ''
                       )}>
                         <TableCell className="font-medium text-xs px-0.5 py-0 text-center">
-                          <div className="flex items-center justify-center gap-0.5">
+                           <div className="flex items-center justify-center gap-0.5">
                             {`${roundInfo.roundNumber}/${roundInfo.cardsDealt}`}
                             {gamePhase === 'SCORING' && 
+                              onEditSpecificRound &&
                               !isEditingCurrentRound && 
-                              roundInfo.roundNumber <= currentRoundForInput && (
+                              roundInfo.roundNumber <= currentRoundForInput && 
+                              currentRoundForInput <= gameRounds.length && ( // Only show if game not over
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <Button 
@@ -566,7 +455,7 @@ export function ScoreInputTable({
                                       variant="outline" 
                                       size="sm" 
                                       className="flex items-center justify-start text-xs"
-                                      onClick={() => onEditSpecificRound && onEditSpecificRound(roundInfo.roundNumber, 'BIDDING')}
+                                      onClick={() => onEditSpecificRound(roundInfo.roundNumber, 'BIDDING')}
                                     >
                                       <MessageSquare className="h-3 w-3 mr-1" /> Edit Bids
                                     </Button>
@@ -574,7 +463,7 @@ export function ScoreInputTable({
                                       variant="outline" 
                                       size="sm" 
                                       className="flex items-center justify-start text-xs"
-                                      onClick={() => onEditSpecificRound && onEditSpecificRound(roundInfo.roundNumber, 'TAKING')}
+                                      onClick={() => onEditSpecificRound(roundInfo.roundNumber, 'TAKING')}
                                     >
                                       <Hand className="h-3 w-3 mr-1" /> Edit Tricks
                                     </Button>
@@ -590,19 +479,8 @@ export function ScoreInputTable({
                             console.error(`Error: Score entry not found for player ${player.playerId} in round ${roundInfo.roundNumber}`);
                             return null;
                           }
-
-                          // Get the dealer for this specific round
-                          const isDealerForThisRound = player.playerId === currentDealerId && roundInfo.roundNumber === currentRoundForInput;
                           
-                          // For past rounds, we need to calculate who was the dealer
-                          const isPastRoundDealer = roundInfo.roundNumber < currentRoundForInput && 
-                            ((firstDealerPlayerId && roundInfo.roundNumber === 1 && player.playerId === firstDealerPlayerId) || 
-                            (roundInfo.roundNumber > 1 && isDealerForRound(
-                              player.playerId, 
-                              roundInfo.roundNumber,
-                              firstDealerPlayerId,
-                              playerOrderForGame
-                            )));
+                          const dealerForThisSpecificRound = isDealerForRound(player.playerId, roundInfo.roundNumber, firstDealerPlayerId, playerOrderForGame);
 
                           const isActiveForBidding = isPlayerActiveForBiddingLive(player.playerId, roundInfo.roundNumber);
                           const isActiveForTaking = isPlayerActiveForTakingLive(player.playerId, roundInfo.roundNumber);
@@ -617,14 +495,7 @@ export function ScoreInputTable({
                                 className={cn(
                                     "text-center align-middle py-0 px-0",
                                     player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30",
-                                    (isDealerForThisRound || isPastRoundDealer || 
-                                     (gamePhase === 'RESULTS' && isDealerForRound(
-                                       player.playerId, 
-                                       roundInfo.roundNumber,
-                                       firstDealerPlayerId,
-                                       playerOrderForGame
-                                     ))) && 
-                                     "bg-primary/20 border-l border-r border-primary/30"
+                                    dealerForThisSpecificRound && "bg-primary/20 border-l border-r border-primary/30"
                                 )}
                             >
                                   <div
@@ -705,99 +576,109 @@ export function ScoreInputTable({
         </div>
       </CardContent>
 
-      {gamePhase === 'SCORING' && currentRoundConfig && (
-        <div className="mt-auto p-1 sm:p-2 md:p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
-           <div className="flex flex-row items-center justify-start gap-3">
+      {gamePhase === 'SCORING' && currentRoundConfig && currentRoundForInput <= gameRounds.length && (
+        <div id="control-panel-sticky-footer" className="mt-auto p-1 sm:p-2 md:p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
+           <div id="control-panel-main-flex-container" className="flex flex-row items-center justify-start gap-3">
                 
-                {(showConfirmBidsButton && onConfirmBidsForRound) || (showAdvanceRoundButton && onAdvanceRoundOrEndGame) ? (
-                    <div className="flex items-center gap-1 sm:gap-2">
-                        <Button 
-                            onClick={showConfirmBidsButton ? onConfirmBidsForRound : onAdvanceRoundOrEndGame}
-                            className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
-                        >
-                           {mainActionButtonText}
-                        </Button>
-                        {onToggleEditMode && (
-                            <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
-                                <Edit className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-4 sm:w-4" /> Edit Entries
+                <div id="action-button-or-numpad-container" className={cn(
+                    // This div takes full width if it's showing action buttons or edit review buttons
+                    (showConfirmBidsButton || showAdvanceRoundButton || (isEditingCurrentRound && !isPlayerValueUnderActiveEdit)) 
+                        ? 'w-full' 
+                        : 'flex flex-col items-start w-full md:w-auto' // Numpad specific layout
+                )}>
+                    {(showConfirmBidsButton && onConfirmBidsForRound) || (showAdvanceRoundButton && onAdvanceRoundOrEndGame) ? (
+                        <div className="flex w-full items-center justify-between gap-1 sm:gap-2">
+                            <Button 
+                                onClick={showConfirmBidsButton ? onConfirmBidsForRound : onAdvanceRoundOrEndGame}
+                                className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
+                            >
+                               {mainActionButtonText}
                             </Button>
-                        )}
-                    </div>
-                ) : isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode ? (
-                    <div className="flex flex-col items-start w-full"> 
-                    <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
-                        {isPlayerValueUnderActiveEdit 
-                        ? `${numPadActionText}`
-                        : `Reviewing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}: ${activeEditingPlayerCurrentValue}`
-                        }
-                    </p>
-                    {isPlayerValueUnderActiveEdit ? (
-                        <NumberInputPad
-                        min={0}
-                        max={currentRoundConfig.cardsDealt}
-                        onSelectNumber={(value) => {
-                            if (currentRoundInputMode === 'BIDDING') {
-                            onSubmitBid(editingPlayerId, value.toString());
-                            } else {
-                            onSubmitTaken(editingPlayerId, value.toString());
-                            }
-                        }}
-                        currentValue={numPadCurrentValue}
-                        disabled={numPadDisabledGlobally}
-                        isNumberInvalid={numPadIsInvalidFn}
-                        className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"
-                        />
-                    ) : (
-                        <div className="flex items-center gap-1 sm:gap-2">
-                        <Button 
-                            onClick={onKeepPlayerValue} 
-                            variant="outline" 
-                            size="sm"
-                            className="px-2 sm:px-3 text-xs sm:text-sm"
-                            disabled={isKeepAndNextButtonDisabled()}
-                        >
-                            Keep & Next
-                        </Button>
-                        <Button onClick={() => onSetActiveEditPlayerValue && onSetActiveEditPlayerValue(true)} size="sm" className="px-2 sm:px-3 text-xs sm:text-sm">Edit Value</Button>
-                        <Button onClick={onToggleEditMode} variant="ghost" size="sm" className="text-destructive hover:text-destructive/80 px-2 sm:px-3 text-xs sm:text-sm">Cancel Edit</Button>
+                            {onToggleEditMode && (
+                                <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
+                                    <Edit className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-4 sm:w-4" /> Edit Entries
+                                </Button>
+                            )}
                         </div>
-                    )}
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-start w-full md:w-auto">
+                    ) : isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode ? (
+                        <div className="flex flex-col items-start w-full"> 
                         <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
-                            {numPadActionText || " "}
+                            {isPlayerValueUnderActiveEdit 
+                            ? `${numPadActionText}`
+                            : `Reviewing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}: ${activeEditingPlayerCurrentValue}`
+                            }
                         </p>
-                        <NumberInputPad
-                            min={0}
-                            max={currentRoundConfig.cardsDealt}
-                            onSelectNumber={(value) => {
-                                const targetPlayerId = currentRoundInputMode === 'BIDDING' ? currentPlayerBiddingId : currentPlayerTakingId;
-                                if (targetPlayerId) {
-                                if (currentRoundInputMode === 'BIDDING') {
-                                    onSubmitBid(targetPlayerId, value.toString());
-                                } else {
-                                    onSubmitTaken(targetPlayerId, value.toString());
-                                }
-                                }
-                            }}
-                            currentValue={numPadCurrentValue}
-                            disabled={numPadDisabledGlobally}
-                            isNumberInvalid={numPadIsInvalidFn}
-                            className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"
-                        />
-                    </div>
-                )}
-          </div>
+                        {isPlayerValueUnderActiveEdit ? (
+                            <NumberInputPad
+                                min={0}
+                                max={currentRoundConfig.cardsDealt}
+                                onSelectNumber={(value) => {
+                                    if (currentRoundInputMode === 'BIDDING') {
+                                    onSubmitBid(editingPlayerId, value.toString());
+                                    } else {
+                                    onSubmitTaken(editingPlayerId, value.toString());
+                                    }
+                                }}
+                                currentValue={numPadCurrentValue}
+                                disabled={numPadDisabledGlobally}
+                                isNumberInvalid={numPadIsInvalidFn}
+                                className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"
+                            />
+                        ) : (
+                            <div className="flex w-full items-center justify-between gap-1 sm:gap-2">
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                    <Button 
+                                        onClick={onKeepPlayerValue} 
+                                        variant="outline" 
+                                        size="sm"
+                                        className="px-2 sm:px-3 text-xs sm:text-sm"
+                                        disabled={disableKeepAndNextDueToRuleViolation()}
+                                    >
+                                        Keep & Next
+                                    </Button>
+                                    <Button onClick={() => onSetActiveEditPlayerValue && onSetActiveEditPlayerValue(true)} size="sm" className="px-2 sm:px-3 text-xs sm:text-sm">Edit Value</Button>
+                                </div>
+                                <Button onClick={onToggleEditMode} variant="ghost" size="sm" className="text-destructive hover:text-destructive/80 px-2 sm:px-3 text-xs sm:text-sm">Cancel Edit</Button>
+                            </div>
+                        )}
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
+                                {numPadActionText || " "}
+                            </p>
+                            <NumberInputPad
+                                min={0}
+                                max={currentRoundConfig.cardsDealt}
+                                onSelectNumber={(value) => {
+                                    const targetPlayerId = currentRoundInputMode === 'BIDDING' ? currentPlayerBiddingId : currentPlayerTakingId;
+                                    if (targetPlayerId) {
+                                    if (currentRoundInputMode === 'BIDDING') {
+                                        onSubmitBid(targetPlayerId, value.toString());
+                                    } else {
+                                        onSubmitTaken(targetPlayerId, value.toString());
+                                    }
+                                    }
+                                }}
+                                currentValue={numPadCurrentValue}
+                                disabled={numPadDisabledGlobally}
+                                isNumberInvalid={numPadIsInvalidFn}
+                                className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"
+                            />
+                        </>
+                    )}
+                </div>
+           </div>
         </div>
       )}
 
 
-      {(gamePhase === 'SCORING' || gamePhase === 'RESULTS') && (
+      {(gamePhase === 'SCORING' || (currentRoundForInput > gameRounds.length && gameRounds.length > 0)) && (
         <div className="px-1 md:px-0 mt-2 pb-2 flex flex-row justify-between items-center gap-1 md:gap-2">
           <Button onClick={onRestartGame} variant="outline" size="sm" className="w-full max-w-full md:max-w-[33vw] text-xs">
             <RefreshCw className="mr-1 h-3 w-3" /> Restart Game
           </Button>
+          {/* Finish game early button is removed as its functionality is tied to the main action button now */}
         </div>
       )}
       {gamePhase === 'DEALER_SELECTION' && (
@@ -813,3 +694,4 @@ export function ScoreInputTable({
     
 
     
+
