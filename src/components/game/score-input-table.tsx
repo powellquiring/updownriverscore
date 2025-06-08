@@ -123,7 +123,7 @@ export function ScoreInputTable({
 
     // Non-dealer validation
     let sumOfTakenByPrecedingPlayersInTurnOrder = 0;
-    if (playerWhosePadIsBeingConfigured !== firstBidderOfRoundId) { // Only calculate sum if not the first bidder
+    if (playerWhosePadIsBeingConfigured !== firstBidderOfRoundId) { 
       const order = playerOrderForGame;
       const startIndex = order.indexOf(firstBidderOfRoundId);
 
@@ -355,8 +355,9 @@ export function ScoreInputTable({
     } else if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) {
         showAdvanceRoundButton = true;
         const nextDealerName = getNextDealerName();
+        const cardsDealtNextRound = gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || '';
         mainActionButtonText = currentRoundForInput < gameRounds.length
-            ? `Deal ${gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || ''} cards (D: ${nextDealerName})`
+            ? `${nextDealerName}: Deal ${cardsDealtNextRound} cards`
             : "Show Final Scores";
         numPadActionText = "";
         numPadDisabledGlobally = true;
@@ -619,7 +620,7 @@ export function ScoreInputTable({
                         : 'flex flex-col items-start w-full md:w-auto'
                 )}>
                     {(showConfirmBidsButton && onConfirmBidsForRound) || (showAdvanceRoundButton && onAdvanceRoundOrEndGame) ? (
-                        <div className="flex w-full items-center gap-1 sm:gap-2">
+                        <div className="flex w-full items-center justify-between gap-1 sm:gap-2">
                             <Button
                                 onClick={showConfirmBidsButton ? onConfirmBidsForRound : onAdvanceRoundOrEndGame}
                                 className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
