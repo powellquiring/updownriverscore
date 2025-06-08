@@ -189,64 +189,58 @@ export function ScoreInputTable({
 
     if (gamePhase === 'SCORING') {
       if (currentRoundForInput > gameRounds.length && gameRounds.length > 0) {
-        return "Final Scores"; // Game over state
+        return "Final Scores";
       }
 
       if (!currentRoundConfig) {
-        return "Loading Round..."; // Should be transient
+        return "Loading Round...";
       }
 
       const cardsDealt = currentRoundConfig.cardsDealt;
+      let playerCurrentValue: number | string | null = '-';
 
       if (isEditingCurrentRound && editingPlayerId) {
         const playerBeingEditedName = allPlayers.find(p => p.id === editingPlayerId)?.name || "Player";
         const editType = currentRoundInputMode === 'BIDDING' ? "Bid" : "Tricks";
         const scoreEntry = playersScoreData.find(p => p.playerId === editingPlayerId)
           ?.scores.find(s => s.roundNumber === currentRoundForInput);
-        const currentValue = currentRoundInputMode === 'BIDDING' ? scoreEntry?.bid : scoreEntry?.taken;
-        return `Editing ${editType} for ${playerBeingEditedName} - ${cardsDealt} cards / ${currentValue ?? '-'}`;
+        playerCurrentValue = currentRoundInputMode === 'BIDDING' ? scoreEntry?.bid : scoreEntry?.taken;
+        return `Editing ${editType} for ${playerBeingEditedName} - ${cardsDealt} cards / ${playerCurrentValue ?? '-'}`;
       }
 
-      // Live input mode
       if (currentRoundInputMode === 'BIDDING') {
         if (currentPlayerBiddingId) {
           const scoreEntry = playersScoreData.find(p => p.playerId === currentPlayerBiddingId)
             ?.scores.find(s => s.roundNumber === currentRoundForInput);
-          const currentValue = scoreEntry?.bid;
-          return `Bidding: ${currentPlayerActiveName} - ${cardsDealt} cards / ${currentValue ?? '-'}`;
-        } else if (!currentRoundBidsConfirmed) { // All bids are in
+          playerCurrentValue = scoreEntry?.bid;
+          return `Bidding: ${currentPlayerActiveName} - ${cardsDealt} cards / ${playerCurrentValue ?? '-'}`;
+        } else if (!currentRoundBidsConfirmed) {
           return `Bids Complete - ${cardsDealt} cards. Ready for Tricks.`;
         }
       } else if (currentRoundInputMode === 'TAKING') {
         if (currentPlayerTakingId) {
           const scoreEntry = playersScoreData.find(p => p.playerId === currentPlayerTakingId)
             ?.scores.find(s => s.roundNumber === currentRoundForInput);
-          const currentValue = scoreEntry?.taken;
-          return `Taking: ${currentPlayerActiveName} - ${cardsDealt} cards / ${currentValue ?? '-'}`;
-        } else if (currentRoundBidsConfirmed) { // All tricks are in
+          playerCurrentValue = scoreEntry?.taken;
+          return `Taking: ${currentPlayerActiveName} - ${cardsDealt} cards / ${playerCurrentValue ?? '-'}`;
+        } else if (currentRoundBidsConfirmed) {
           const isLastRound = currentRoundForInput === gameRounds.length;
           const nextActionText = isLastRound ? "Show Final Scores." : "Ready for Next Round.";
           return `Tricks Complete - ${cardsDealt} cards. ${nextActionText}`;
         }
       }
       
-      // Fallback for SCORING phase if no specific state matches above.
-      // This typically covers the state where bids are all in but not yet confirmed to move to 'TAKING'.
       if (currentRoundInputMode === 'BIDDING' && !currentPlayerBiddingId && !currentRoundBidsConfirmed) {
           return `Bids Complete - ${cardsDealt} cards. Ready for Tricks.`;
       }
-      // Or when tricks are all in but not yet advanced to next round/game end.
       if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) {
           const isLastRound = currentRoundForInput === gameRounds.length;
           const nextActionText = isLastRound ? "Show Final Scores." : "Ready for Next Round.";
           return `Tricks Complete - ${cardsDealt} cards. ${nextActionText}`;
       }
-
-      // A generic title if somehow none of the above states are met during SCORING
       return `Round ${currentRoundForInput} (${cardsDealt} cards)`;
     }
-
-    return "Score Sheet"; // Absolute fallback if not in DEALER_SELECTION or SCORING
+    return "Score Sheet";
   };
 
 
@@ -421,13 +415,15 @@ export function ScoreInputTable({
                {(gamePhase === 'SCORING' || (currentRoundForInput > gameRounds.length && gameRounds.length > 0)) && playersScoreData.length > 0 && (
                  <TableRow className="border-b-0">
                     <TableHead
-                        colSpan={1 + playersScoreData.length}
-                        className="text-xs text-muted-foreground py-0 px-0.5 sm:px-1"
+                        className="text-xs text-left text-muted-foreground py-0 px-0.5 sm:px-1"
                     >
-                       <div className="flex justify-between items-center w-full">
-                            <span><strong>R</strong>ound/<strong>C</strong>ard</span>
-                            <span className="flex items-center">Bid/Take-&gt;Score</span>
-                        </div>
+                        <span><strong>R</strong>ound/<strong>C</strong>ard</span>
+                    </TableHead>
+                    <TableHead
+                        colSpan={playersScoreData.length}
+                        className="text-xs text-center text-muted-foreground py-0 px-0.5 sm:px-1"
+                    >
+                        <span className="flex items-center justify-center">Bid/Take-&gt;Score</span>
                     </TableHead>
                 </TableRow>
               )}
@@ -676,7 +672,9 @@ export function ScoreInputTable({
                                     </Button>
                                     <Button onClick={() => onSetActiveEditPlayerValue && onSetActiveEditPlayerValue(true)} size="sm" className="px-2 sm:px-3 text-xs sm:text-sm">Edit Value</Button>
                                 </div>
-                                <Button onClick={onToggleEditMode} variant="ghost" size="sm" className="text-destructive hover:text-destructive/80 px-2 sm:px-3 text-xs sm:text-sm">Cancel Edit</Button>
+                                <div className="ml-auto">
+                                  <Button onClick={onToggleEditMode} variant="ghost" size="sm" className="text-destructive hover:text-destructive/80 px-2 sm:px-3 text-xs sm:text-sm">Cancel Edit</Button>
+                                </div>
                             </div>
                         )}
                         </div>
