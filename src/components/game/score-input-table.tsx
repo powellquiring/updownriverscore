@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption, TableFooter } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode, ScoreInputTableProps } from '@/lib/types';
+import type { PlayerScoreData, GameRoundInfo, GamePhase, Player, CurrentRoundInputMode, ScoreInputTableProps, RoundScoreEntry } from '@/lib/types';
 import { RefreshCw, UserCheck, UserCog, Target, Flag, Award, Edit, Edit2, MessageSquare, Hand } from 'lucide-react';
 import { NumberInputPad } from './number-input-pad';
 import { cn } from '@/lib/utils';
@@ -96,6 +96,34 @@ export function ScoreInputTable({
     };
   }, [playersScoreData, playerOrderForGame, currentDealerId]);
 
+  function idToOrder (playerId: string): number {
+      return playerOrderForGame.indexOf(playerId);
+  }
+  
+  // retrieve the RoundScoreEntries for all players in the bidding order up to but not including the player whose pad is being configured
+  function previousRoundScoreEntries( roundConfigForCheck: GameRoundInfo, player: string, firstInRound: string) : RoundScoreEntry[] {
+      const order = playerOrderForGame;
+      const startIndex = order.indexOf(firstInRound);
+      const roundNumForCheck = roundConfigForCheck.roundNumber;
+      let ret: RoundScoreEntry[] = []
+      for (let i = 0; i < order.length; i++) {
+        const currentIndexInOrder = (startIndex + i) % order.length;
+        const currentPlayerInSequenceId = order[currentIndexInOrder];
+
+        if (currentPlayerInSequenceId === player) {
+          break; 
+        }
+
+        const scoreEntry = playersScoreData
+          .find(pData => pData.playerId === currentPlayerInSequenceId) ?.scores.find(s => s.roundNumber === roundNumForCheck);
+        
+        if (scoreEntry) {
+          ret.push(scoreEntry)
+        }
+      }
+      return ret
+  }
+
   const getIsTakenInvalid = useCallback((
     roundConfigForCheck: GameRoundInfo | undefined,
     playerWhosePadIsBeingConfigured: string
@@ -104,58 +132,23 @@ export function ScoreInputTable({
       return () => false;
     }
     const cardsDealt = roundConfigForCheck.cardsDealt;
-    const roundNumForCheck = roundConfigForCheck.roundNumber;
     const dealerForThisRound = currentDealerId;
 
-    if (playerWhosePadIsBeingConfigured === dealerForThisRound) {
-        let sumOfTakenByAllOtherPlayers = 0;
-        playersScoreData.forEach(pData => {
-            if (pData.playerId !== dealerForThisRound) {
-                const scoreEntry = pData.scores.find(s => s.roundNumber === roundNumForCheck);
-                sumOfTakenByAllOtherPlayers += (scoreEntry?.taken ?? 0);
-            }
-        });
-        return (num_on_pad: number) => {
-            if (num_on_pad < 0 || num_on_pad > cardsDealt) return true;
-            return sumOfTakenByAllOtherPlayers + num_on_pad !== cardsDealt;
-        };
-    }
-
-    // Non-dealer validation
     let sumOfTakenByPrecedingPlayersInTurnOrder = 0;
-    if (playerWhosePadIsBeingConfigured !== firstBidderOfRoundId) { 
-      const order = playerOrderForGame;
-      const startIndex = order.indexOf(firstBidderOfRoundId);
-
-      if (startIndex !== -1) {
-        for (let i = 0; i < order.length; i++) {
-          const currentIndexInOrder = (startIndex + i) % order.length;
-          const currentPlayerInSequenceId = order[currentIndexInOrder];
-
-          if (currentPlayerInSequenceId === playerWhosePadIsBeingConfigured) {
-            break; 
-          }
-
-          const scoreEntry = playersScoreData
-            .find(pData => pData.playerId === currentPlayerInSequenceId)
-            ?.scores.find(s => s.roundNumber === roundNumForCheck);
-
-          sumOfTakenByPrecedingPlayersInTurnOrder += (scoreEntry?.taken ?? 0);
-        }
-      } else {
-        console.error("getIsTakenInvalid: firstBidderOfRoundId not found for non-dealer validation.");
-        return () => true; 
-      }
+    for (const scoreEntry of previousRoundScoreEntries( roundConfigForCheck, playerWhosePadIsBeingConfigured, firstBidderOfRoundId)) {
+          sumOfTakenByPrecedingPlayersInTurnOrder += (scoreEntry.taken ?? 0);
     }
-
 
     return (num_on_pad: number) => {
-        if (num_on_pad < 0 || num_on_pad > cardsDealt) return true;
+        if (num_on_pad < 0) return true;
         const totalIfCurrentPlayerTakesNumOnPad = sumOfTakenByPrecedingPlayersInTurnOrder + num_on_pad;
+        if (playerWhosePadIsBeingConfigured === dealerForThisRound) {
+            return sumOfTakenByPrecedingPlayersInTurnOrder + num_on_pad !== cardsDealt;
+        } else {
         return totalIfCurrentPlayerTakesNumOnPad > cardsDealt;
+        }
     };
   }, [playersScoreData, playerOrderForGame, currentDealerId, firstBidderOfRoundId]);
-
 
   const currentDealerName = allPlayers.find(p => p.id === currentDealerId)?.name;
   let currentPlayerActiveName = '';
@@ -209,24 +202,20 @@ export function ScoreInputTable({
       }
 
       if (currentRoundInputMode === 'BIDDING') {
-        if (currentPlayerBiddingId) {
-          const scoreEntry = playersScoreData.find(p => p.playerId === currentPlayerBiddingId)
-            ?.scores.find(s => s.roundNumber === currentRoundForInput);
-          playerCurrentValue = scoreEntry?.bid;
-          return `Bidding: ${currentPlayerActiveName} - ${cardsDealt} cards / ${playerCurrentValue ?? '-'}`;
+        if (currentPlayerBiddingId && firstBidderOfRoundId) {
+          const currentBidTotal = previousRoundScoreEntries( currentRoundConfig, currentPlayerBiddingId, firstBidderOfRoundId).reduce((sum, scoreEntry) => sum + (scoreEntry.bid ?? 0), 0);
+          return `Bidding: ${currentPlayerActiveName} - bids left: ${cardsDealt - currentBidTotal}`;
         } else if (!currentRoundBidsConfirmed) {
           return `Bids Complete - ${cardsDealt} cards. Ready for Tricks.`;
         }
       } else if (currentRoundInputMode === 'TAKING') {
-        if (currentPlayerTakingId) {
-          const scoreEntry = playersScoreData.find(p => p.playerId === currentPlayerTakingId)
-            ?.scores.find(s => s.roundNumber === currentRoundForInput);
-          playerCurrentValue = scoreEntry?.taken;
-          return `Taking: ${currentPlayerActiveName} - ${cardsDealt} cards / ${playerCurrentValue ?? '-'}`;
+        if (currentPlayerTakingId && firstBidderOfRoundId) {
+          const currentTakeTotal = previousRoundScoreEntries( currentRoundConfig, currentPlayerTakingId, firstBidderOfRoundId).reduce((sum, scoreEntry) => sum + (scoreEntry.taken ?? 0), 0);
+          return `Taking: ${currentPlayerActiveName} - tricks left: ${cardsDealt - currentTakeTotal}`;
         } else if (currentRoundBidsConfirmed) {
           const isLastRound = currentRoundForInput === gameRounds.length;
           const nextActionText = isLastRound ? "Show Final Scores." : "Ready for Next Round.";
-          return `Tricks Complete - ${cardsDealt} cards. ${nextActionText}`;
+          return `Tricks Complete - ${cardsDealt} cards taken. ${nextActionText}`;
         }
       }
       
@@ -294,13 +283,14 @@ export function ScoreInputTable({
       });
       return sumOfBidsIfKept === currentRoundConfig.cardsDealt;
     }
-    else if (currentRoundInputMode === 'TAKING' && editingPlayerId === currentDealerId) {
-      let sumOfTakenIfKept = 0;
-      playersScoreData.forEach(pData => {
-          const currentRoundScoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
-          sumOfTakenIfKept += (currentRoundScoreEntry?.taken ?? 0);
-      });
-      return sumOfTakenIfKept !== currentRoundConfig.cardsDealt;
+    else if (currentRoundInputMode === 'TAKING') {
+      if (!firstBidderOfRoundId) return false;
+      const currentTakeTotal = previousRoundScoreEntries( currentRoundConfig, editingPlayerId, firstBidderOfRoundId).reduce((sum, scoreEntry) => sum + (scoreEntry.taken ?? 0), 0);
+      if (editingPlayerId === currentDealerId) {
+        return currentTakeTotal  + (activeEditingPlayerCurrentValue as number) !== currentRoundConfig.cardsDealt;
+      } else {
+        return currentTakeTotal  + (activeEditingPlayerCurrentValue as number) > currentRoundConfig.cardsDealt;
+      }
     }
     return false;
   };
@@ -339,14 +329,15 @@ export function ScoreInputTable({
       numPadCurrentValue = player?.scores.find(s => s.roundNumber === currentRoundForInput)?.bid ?? null;
       numPadIsInvalidFn = getIsBidInvalid(currentRoundConfig, currentPlayerBiddingId);
       numPadPlayerName = allPlayers.find(p => p.id === currentPlayerBiddingId)?.name || "";
-      numPadActionText = `Bid: ${numPadPlayerName}`;
+      // numPadActionText = `Bid: ${numPadPlayerName}`;
+      numPadActionText = getHeaderTitle();
     } else if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId) {
       numPadDisabledGlobally = false;
       const player = playersScoreData.find(p => p.playerId === currentPlayerTakingId);
       numPadCurrentValue = player?.scores.find(s => s.roundNumber === currentRoundForInput)?.taken ?? null;
       numPadIsInvalidFn = getIsTakenInvalid(currentRoundConfig, currentPlayerTakingId);
       numPadPlayerName = allPlayers.find(p => p.id === currentPlayerTakingId)?.name || "";
-      numPadActionText = `Taken: ${numPadPlayerName}`;
+      numPadActionText = getHeaderTitle();
     } else if (currentRoundInputMode === 'BIDDING' && !currentPlayerBiddingId && !currentRoundBidsConfirmed) {
         showConfirmBidsButton = true;
         mainActionButtonText = "Enter Tricks";
@@ -370,11 +361,6 @@ export function ScoreInputTable({
 
   return (
     <Card className="shadow-xl flex flex-col" style={{ minHeight: 'calc(100vh - 10rem)' }}>
-      <CardHeader className="py-1 sm:py-2">
-        <CardTitle className="font-headline text-xs sm:text-sm text-center text-primary-foreground truncate px-1">
-          {getHeaderTitle()}
-        </CardTitle>
-      </CardHeader>
       <CardContent className="px-0.5 sm:px-1 md:px-1 py-1 sm:py-2 flex-grow overflow-y-auto">
         <div className="overflow-x-auto">
           <Table>
@@ -621,12 +607,17 @@ export function ScoreInputTable({
                 )}>
                     {(showConfirmBidsButton && onConfirmBidsForRound) || (showAdvanceRoundButton && onAdvanceRoundOrEndGame) ? (
                         <div className="flex w-full items-center justify-between gap-1 sm:gap-2">
-                            <Button
-                                onClick={showConfirmBidsButton ? onConfirmBidsForRound : onAdvanceRoundOrEndGame}
-                                className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
-                            >
-                               {mainActionButtonText}
-                            </Button>
+                            <div className="flex flex-col w-full">
+                                <p className="text-xs sm:text-sm font-medium text-left mb-1">
+                                    {getHeaderTitle()}
+                                </p>
+                                <Button
+                                    onClick={showConfirmBidsButton ? onConfirmBidsForRound : onAdvanceRoundOrEndGame}
+                                    className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
+                                >
+                                   {mainActionButtonText}
+                                </Button>
+                            </div>
                             {onToggleEditMode && (
                                 <div className="ml-auto">
                                     <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
