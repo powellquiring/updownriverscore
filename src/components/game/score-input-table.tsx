@@ -557,7 +557,7 @@ export function ScoreInputTable({
                 <TableFooter>
                   <TableRow className="bg-card border-t-2 border-primary">
                     <TableCell className="font-bold text-xs sm:text-sm text-right px-0.5 py-0.5">Total</TableCell>
-                    {sortedPlayersForDisplay.map(player => {
+                    {playersScoreData.map(player => {
                       const rank = getPlayerRank(player.playerId);
                       let rankStyle = "text-primary-foreground";
                       let awardIcon = null;
