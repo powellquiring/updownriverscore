@@ -10,6 +10,7 @@ import { RefreshCw, UserCheck, UserCog, Target, Flag, Award, Edit, Edit2, Messag
 import { NumberInputPad } from './number-input-pad';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export function ScoreInputTable({
   playersScoreData,
@@ -41,6 +42,25 @@ export function ScoreInputTable({
   onSetActiveEditPlayerValue,
   onEditSpecificRound,
 }: ScoreInputTableProps) {
+  // Add state for the confirmation dialog
+  const [showRestartConfirmation, setShowRestartConfirmation] = useState(false);
+  
+  // Add a handler for the restart button click
+  const handleRestartClick = useCallback(() => {
+    setShowRestartConfirmation(true);
+  }, []);
+
+  // Add a handler for confirming restart
+  const handleConfirmRestart = useCallback(() => {
+    setShowRestartConfirmation(false);
+    onRestartGame();
+  }, [onRestartGame]);
+  
+  // Add a direct restart handler for the "Back to Setup" button
+  const handleDirectRestart = useCallback(() => {
+    onRestartGame();
+  }, [onRestartGame]);
+
   const isDealerForRound = useCallback((
     playerId: string,
     roundNumber: number,
@@ -214,8 +234,8 @@ export function ScoreInputTable({
           return `Taking: ${currentPlayerActiveName} - tricks left: ${cardsDealt - currentTakeTotal}`;
         } else if (currentRoundBidsConfirmed) {
           const isLastRound = currentRoundForInput === gameRounds.length;
-          const nextActionText = isLastRound ? "Show Final Scores." : "Ready for Next Round.";
-          return `Tricks Complete - ${cardsDealt} cards taken. ${nextActionText}`;
+          const nextActionText = isLastRound ? "Ready for Final Scores." : "Ready for Next Round.";
+          return `Tricks Complete - ${cardsDealt} cards. ${nextActionText}`;
         }
       }
       
@@ -224,7 +244,7 @@ export function ScoreInputTable({
       }
       if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) {
           const isLastRound = currentRoundForInput === gameRounds.length;
-          const nextActionText = isLastRound ? "Show Final Scores." : "Ready for Next Round.";
+          const nextActionText = isLastRound ? "Ready for Final Scores." : "Ready for Next Round.";
           return `Tricks Complete - ${cardsDealt} cards. ${nextActionText}`;
       }
       return `Round ${currentRoundForInput} (${cardsDealt} cards)`;
@@ -703,18 +723,36 @@ export function ScoreInputTable({
 
       {(gamePhase === 'SCORING' || (currentRoundForInput > gameRounds.length && gameRounds.length > 0)) && (
         <div className="px-1 md:px-0 mt-2 pb-2 flex flex-row justify-between items-center gap-1 md:gap-2">
-          <Button onClick={onRestartGame} variant="outline" size="sm" className="w-full max-w-full md:max-w-[33vw] text-xs">
+          <Button onClick={handleRestartClick} variant="outline" size="sm" className="w-full max-w-full md:max-w-[33vw] text-xs">
             <RefreshCw className="mr-1 h-3 w-3" /> Restart Game
           </Button>
         </div>
       )}
       {gamePhase === 'DEALER_SELECTION' && (
         <div className="mt-4 px-1 sm:px-0 pb-2 flex justify-end items-center gap-4">
-          <Button onClick={onRestartGame} variant="outline" size="default">
+          <Button onClick={handleDirectRestart} variant="outline" size="default">
             <RefreshCw className="mr-1 h-4 w-4" /> Back to Setup
           </Button>
         </div>
       )}
+      
+      {/* Add the AlertDialog for confirmation */}
+      <AlertDialog open={showRestartConfirmation} onOpenChange={setShowRestartConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to restart?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will destroy the current game and all scores will be lost. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRestart} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Yes, Restart Game
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
