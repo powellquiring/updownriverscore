@@ -14,19 +14,25 @@ interface PlayerSetupFormProps {
   players: Player[];
   onAddPlayer: (name: string) => void;
   onRemovePlayer: (id: string) => void;
-  onStartGame: (maxCardsInHand: number) => void;
+  onStartGame: (maxCardsInHand: number, bidPoints: number) => void;
 }
 
 export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartGame }: PlayerSetupFormProps) {
   const [playerName, setPlayerName] = useState('');
   const [maxCardsInHand, setMaxCardsInHand] = useState('2'); // Default to 2
+  const [bidPoints, setBidPoints] = useState('10'); // Default to 10
   // const { toast } = useToast(); // Removed
   const startGameButtonRef = useRef<HTMLButtonElement>(null);
   const maxCardsInputRef = useRef<HTMLInputElement>(null);
+  const bidPointsInputRef = useRef<HTMLInputElement>(null);
 
   const isStartGameButtonDisabled = () => {
     const numMaxCards = parseInt(maxCardsInHand, 10);
+    const numBidPoints = parseInt(bidPoints, 10);
     if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) {
+        return true;
+    }
+    if (isNaN(numBidPoints) || numBidPoints < 0 || numBidPoints > 20) {
         return true;
     }
     if (players.length < 2) {
@@ -46,7 +52,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
         // startGameButtonRef.current.focus(); 
       }
     }
-  }, [players, maxCardsInHand]);
+  }, [players, maxCardsInHand, bidPoints]);
 
 
   const handleAddPlayerFormSubmit = (e: React.FormEvent) => {
@@ -67,17 +73,20 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
 
   const handleInitiateGame = () => {
     const numMaxCards = parseInt(maxCardsInHand, 10);
+    const numBidPoints = parseInt(bidPoints, 10);
     if (isNaN(numMaxCards) || numMaxCards < 1 || numMaxCards > 7) {
-      // toast({ title: "Invalid Max Cards", description: "Max cards per hand must be a number between 1 and 7.", variant: "destructive" }); // Removed
       console.warn("Invalid Max Cards. Max cards per hand must be a number between 1 and 7.");
       return;
     }
+    if (isNaN(numBidPoints) || numBidPoints < 0 || numBidPoints > 20) {
+      console.warn("Invalid Bid Points. Points for making bid must be a number between 0 and 20.");
+      return;
+    }
     if (players.length < 2) {
-      // toast({ title: "Need at least 2 players to start.", variant: "destructive" }); // Removed
       console.warn("Need at least 2 players to start.");
       return;
     }
-    onStartGame(numMaxCards);
+    onStartGame(numMaxCards, numBidPoints);
   };
   
   const handleMaxCardsKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -96,6 +105,13 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
       // If playerName is not empty, the form's onSubmit will handle adding the player.
       // If playerName is empty but game cannot be started, the form's onSubmit will trigger,
       // and handleAddPlayerFormSubmit will show its "name cannot be empty" toast.
+    }
+  };
+
+  const handleBidPointsKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter' && !isStartGameButtonDisabled()) {
+      event.preventDefault();
+      handleInitiateGame();
     }
   };
 
@@ -130,6 +146,25 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
             />
             <p id="max-cards-description" className="text-xs text-muted-foreground">
               Determines rounds. E.g., 7 means 13 rounds (7 down to 1, then 2 up to 7). Actual max may be lower with many players.
+            </p>
+          </div>
+
+          <div className="space-y-2 mt-4">
+            <Label htmlFor="bid-points" className="text-sm font-medium text-foreground">Points for Making Bid</Label>
+            <Input
+              id="bid-points"
+              type="number"
+              value={bidPoints}
+              onChange={(e) => setBidPoints(e.target.value)}
+              onKeyDown={handleBidPointsKeyDown}
+              min="0"
+              max="20"
+              placeholder="e.g., 10"
+              className="w-full"
+              aria-describedby="bid-points-description"
+            />
+            <p id="bid-points-description" className="text-xs text-muted-foreground">
+              Base points awarded when a player makes their bid exactly. Default is 10.
             </p>
           </div>
         </div>

@@ -33,10 +33,10 @@ const defaultPlayers: Player[] = [
   { id: uuidv4(), name: 'jak' },
 ];
 
-const calculateRoundScore = (bid: number | null, taken: number | null): number => {
+const calculateRoundScore = (bid: number | null, taken: number | null, bidPoints: number): number => {
   if (bid === null || taken === null) return 0;
   if (bid === taken) {
-    return 10 + bid;
+    return bidPoints + bid;
   }
   return 0; 
 };
@@ -69,6 +69,9 @@ export function GameManager() {
     originalBidsConfirmed: boolean;
   } | null>(null);
   
+  // Add bidPoints state
+  const [bidPoints, setBidPoints] = useState<number>(10);
+  
   const handlePlayAgain = useCallback(() => {
     setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
     setGameRounds([]);
@@ -86,6 +89,7 @@ export function GameManager() {
     setIsEditingCurrentRound(false);
     setEditingPlayerId(null);
     setIsPlayerValueUnderActiveEdit(false);
+    setBidPoints(10); // Reset to default
     localStorage.removeItem('updownRiverScorerState'); 
     localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
   }, []);
@@ -144,7 +148,7 @@ export function GameManager() {
         playersScoreData.length === 0 &&
         currentRoundInputMode === 'BIDDING' &&
         !currentRoundBidsConfirmed &&
-        !isEditingCurrentRound && // Added check for new state
+        !isEditingCurrentRound &&
         !localStorage.getItem('updownRiverScorerState_gameStartedOnce')) {
       return;
     }
@@ -153,11 +157,11 @@ export function GameManager() {
       players, gameRounds, playersScoreData, currentRoundForInput, gamePhase,
       firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId,
       currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed,
-      isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit, // Save new states
+      isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints, // Add bidPoints
     };
     localStorage.setItem('updownRiverScorerState', JSON.stringify(stateToSave));
     if (gamePhase !== 'SETUP') localStorage.setItem('updownRiverScorerState_gameStartedOnce', 'true');
-  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit]);
+  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints]);
 
 
   const handleAddPlayer = useCallback((name: string) => {
@@ -170,11 +174,14 @@ export function GameManager() {
     setPlayerOrderForGame(prevOrder => prevOrder.filter(playerId => playerId !== id));
   }, []);
 
-  const handleStartGame = useCallback((maxCardsDealtByUser: number) => {
+  const handleStartGame = useCallback((maxCardsDealtByUser: number, bidPointsValue: number) => {
     if (players.length < 2) {
       console.warn("Not enough players. You need at least 2 players to start.");
       return;
     }
+    
+    setBidPoints(bidPointsValue);
+    
     const roundsConfig = generateGameRounds(players.length, maxCardsDealtByUser);
     if (roundsConfig.length === 0) {
         console.warn("Game Configuration Error: Could not generate rounds.");
@@ -259,7 +266,7 @@ export function GameManager() {
     setPlayersScoreData(prevData => 
         prevData.map(pd => pd.playerId === playerId ? {
             ...pd,
-            scores: pd.scores.map(s => s.roundNumber === currentRoundForInput ? { ...s, bid: bid, roundScore: calculateRoundScore(bid, s.taken) } : s),
+            scores: pd.scores.map(s => s.roundNumber === currentRoundForInput ? { ...s, bid: bid, roundScore: calculateRoundScore(bid, s.taken, bidPoints) } : s),
           } : pd
         ).map(p => ({ 
             ...p,
@@ -281,7 +288,7 @@ export function GameManager() {
             setCurrentPlayerBiddingId(nextBidderId);
         }
     }
-  }, [currentPlayerBiddingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, playersScoreData, currentDealerId, isEditingCurrentRound, editingPlayerId]);
+  }, [currentPlayerBiddingId, currentRoundForInput, gameRounds, playerOrderForGame, firstBidderOfRoundId, playersScoreData, currentDealerId, isEditingCurrentRound, editingPlayerId, bidPoints]);
 
   const handleConfirmBidsForRound = useCallback(() => {
     if (currentPlayerBiddingId !== null || currentRoundBidsConfirmed || isEditingCurrentRound) {
@@ -389,7 +396,7 @@ export function GameManager() {
         if (playerData.playerId === playerId) {
           const updatedScores = playerData.scores.map(scoreEntry => {
             if (scoreEntry.roundNumber === currentRoundForInput) {
-              return { ...scoreEntry, taken: taken, roundScore: calculateRoundScore(scoreEntry.bid, taken) };
+              return { ...scoreEntry, taken: taken, roundScore: calculateRoundScore(scoreEntry.bid, taken, bidPoints) };
             }
             return scoreEntry;
           });
@@ -416,7 +423,7 @@ export function GameManager() {
     }
   }, [
     currentPlayerTakingId, currentRoundBidsConfirmed, currentRoundForInput, gameRounds, 
-    playerOrderForGame, firstBidderOfRoundId, playersScoreData, isEditingCurrentRound, editingPlayerId, currentDealerId
+    playerOrderForGame, firstBidderOfRoundId, playersScoreData, isEditingCurrentRound, editingPlayerId, currentDealerId, bidPoints
   ]);
 
   // Add a dummy function to replace handleFinishGameEarly
@@ -557,7 +564,8 @@ export function GameManager() {
         currentPlayerTakingId={currentPlayerTakingId}
         currentRoundBidsConfirmed={currentRoundBidsConfirmed}
         firstBidderOfRoundId={firstBidderOfRoundId}
-        firstDealerPlayerId={firstDealerPlayerId} 
+        firstDealerPlayerId={firstDealerPlayerId}
+        bidPoints={bidPoints}
         onSubmitBid={handleSubmitBid}
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}

@@ -41,6 +41,7 @@ export interface ScoreInputTableProps {
   currentRoundBidsConfirmed: boolean;
   firstBidderOfRoundId: string | null;
   firstDealerPlayerId: string | null;
+  bidPoints: number;
   onSubmitBid: (playerId: string, bid: string) => void;
   onSubmitTaken: (playerId: string, taken: string) => void;
   onConfirmBidsForRound: () => void;

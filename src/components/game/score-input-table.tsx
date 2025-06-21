@@ -26,6 +26,7 @@ export function ScoreInputTable({
   currentRoundBidsConfirmed,
   firstBidderOfRoundId,
   firstDealerPlayerId,
+  bidPoints,
   onSubmitBid,
   onSubmitTaken,
   onConfirmBidsForRound,
