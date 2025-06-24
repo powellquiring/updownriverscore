@@ -723,7 +723,9 @@ export function ScoreInputTable({
                                 min={0}
                                 max={currentRoundConfig.cardsDealt}
                                 onSelectNumber={(value) => {
-                                    const activePlayerIdForSubmission = isEditingCurrentRound && editingPlayerId ? editingPlayerId : (currentRoundInputMode === 'BIDDING' ? currentPlayerBiddingId : currentPlayerTakingId);
+                                    const activePlayerIdForSubmission = isEditingCurrentRound && editingPlayerId 
+                                        ? editingPlayerId 
+                                        : (currentRoundInputMode === 'BIDDING' ? currentPlayerBiddingId : currentPlayerTakingId);
                                     if (activePlayerIdForSubmission) {
                                         if (currentRoundInputMode === 'BIDDING') {
                                             onSubmitBid(activePlayerIdForSubmission, value.toString());
@@ -732,7 +734,12 @@ export function ScoreInputTable({
                                         }
                                     }
                                 }}
-                                currentValue={numPadCurrentValue}
+                                currentValue={
+                                    currentRoundInputMode === 'TAKING' && numPadCurrentValue === null
+                                        ? playersScoreData.find(p => p.playerId === (isEditingCurrentRound ? editingPlayerId : currentPlayerTakingId))
+                                            ?.scores.find(s => s.roundNumber === currentRoundForInput)?.bid ?? null
+                                        : numPadCurrentValue
+                                }
                                 disabled={numPadDisabledGlobally}
                                 isNumberInvalid={numPadIsInvalidFn}
                                 className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"

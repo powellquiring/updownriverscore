@@ -295,11 +295,15 @@ export function GameManager() {
       console.warn("Cannot confirm bids at this time.");
       return;
     }
+    
+    // Don't set default taken values in the state
+    // Let the UI show the bid as a default when the number pad appears
+    
     setCurrentRoundBidsConfirmed(true);
     setCurrentRoundInputMode('TAKING');
     setCurrentPlayerTakingId(firstBidderOfRoundId); 
     console.log("Bids Confirmed! Now enter tricks taken.");
-  }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId, isEditingCurrentRound]);
+  }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId, isEditingCurrentRound, currentRoundForInput]);
 
 
   const handleAdvanceRoundOrEndGame = useCallback(() => {
@@ -365,30 +369,30 @@ export function GameManager() {
     const dealerForThisRound = currentDealerId; 
     const isThisPlayerTheDealer = playerId === dealerForThisRound;
 
-
     if (isThisPlayerTheDealer && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound !== cardsInCurrentRound) {
         console.warn(`Invalid Total Taken. For dealer, total tricks taken (${currentSumOfTakenThisRound}) must equal cards dealt (${cardsInCurrentRound}). Adjust entry.`);
         return; 
     }
+    
     if (!isThisPlayerTheDealer && cardsInCurrentRound !== undefined && currentSumOfTakenThisRound > cardsInCurrentRound) {
-         // Only perform this validation for non-editing mode
-         // In edit mode, we allow temporary excess as players' values will be adjusted later
-         if (!isEditingCurrentRound) {
-             // Check if sum of *all* players' 'taken' (including this proposed one) exceeds cards dealt.
-             let tempTotalTakenForAll = 0;
-             playersScoreData.forEach(pData => {
+        // Only perform this validation for non-editing mode
+        // In edit mode, we allow temporary excess as players' values will be adjusted later
+        if (!isEditingCurrentRound) {
+            // Check if sum of *all* players' 'taken' (including this proposed one) exceeds cards dealt.
+            let tempTotalTakenForAll = 0;
+            playersScoreData.forEach(pData => {
                 const scoreEntry = pData.scores.find(s => s.roundNumber === currentRoundForInput);
                 if (pData.playerId === playerId) {
                     tempTotalTakenForAll += taken;
                 } else {
                     tempTotalTakenForAll += (scoreEntry?.taken ?? 0);
                 }
-             });
-             if (tempTotalTakenForAll > cardsInCurrentRound) {
+            });
+            if (tempTotalTakenForAll > cardsInCurrentRound) {
                 console.warn(`Invalid Taken Count. Total tricks taken so far by all players (${tempTotalTakenForAll}) would exceed cards dealt (${cardsInCurrentRound}).`);
                 return;
-             }
-         }
+            }
+        }
     }
     
     setPlayersScoreData(prevData =>
@@ -584,7 +588,7 @@ export function GameManager() {
       const previousPlayerId = order[previousIndex];
       console.log("Undoing to previous bidder:", previousPlayerId);
       
-      // Reset the previous player's bid
+      // Reset the previous player's bid to null
       setPlayersScoreData(prevData => {
         console.log("Resetting bid for player:", previousPlayerId);
         return prevData.map(pd => pd.playerId === previousPlayerId ? {
@@ -621,6 +625,19 @@ export function GameManager() {
         setCurrentPlayerTakingId(null);
         setCurrentPlayerBiddingId(lastBidderId);
         
+        // Reset all players' taken values to null for this round
+        setPlayersScoreData(prevData => {
+          return prevData.map(pd => ({
+            ...pd,
+            scores: pd.scores.map(s => s.roundNumber === currentRoundForInput ? 
+              { ...s, taken: null, roundScore: 0 } : s),
+          }))
+          .map(p => ({ 
+            ...p,
+            totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
+          }));
+        });
+        
         return;
       }
       
@@ -629,7 +646,7 @@ export function GameManager() {
       const previousPlayerId = order[previousIndex];
       console.log("Undoing to previous taker:", previousPlayerId);
       
-      // Reset the previous player's taken value
+      // Reset the previous player's taken value to null
       setPlayersScoreData(prevData => {
         console.log("Resetting taken for player:", previousPlayerId);
         return prevData.map(pd => pd.playerId === previousPlayerId ? {
