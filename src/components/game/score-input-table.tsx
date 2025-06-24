@@ -42,6 +42,7 @@ export function ScoreInputTable({
   onKeepPlayerValue,
   onSetActiveEditPlayerValue,
   onEditSpecificRound,
+  onUndoPreviousPlayer,
 }: ScoreInputTableProps) {
   // Add state for the confirmation dialog
   const [showRestartConfirmation, setShowRestartConfirmation] = useState(false);
@@ -693,9 +694,31 @@ export function ScoreInputTable({
                         </div>
                     ) : (
                         <>
-                            <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
-                                {numPadActionText || " "}
-                            </p>
+                            <div className="flex justify-between items-center w-full">
+                                <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
+                                    {numPadActionText || " "}
+                                </p>
+                                {/* Add undo button here */}
+                                {((currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId) || 
+                                  (currentRoundInputMode === 'TAKING' && currentPlayerTakingId)) && 
+                                  !isEditingCurrentRound && onUndoPreviousPlayer && (
+                                    <Button 
+                                        onClick={() => {
+                                          console.log("Undo button clicked");
+                                          onUndoPreviousPlayer();
+                                        }} 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="mb-1"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 h-3 w-3">
+                                            <path d="M9 14 4 9l5-5"/>
+                                            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+                                        </svg>
+                                        Undo
+                                    </Button>
+                                )}
+                            </div>
                             <NumberInputPad
                                 min={0}
                                 max={currentRoundConfig.cardsDealt}

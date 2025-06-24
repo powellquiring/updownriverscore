@@ -531,6 +531,131 @@ export function GameManager() {
   }, [currentRoundForInput, currentRoundInputMode, currentRoundBidsConfirmed, isEditingCurrentRound, 
       firstDealerPlayerId, playerOrderForGame]);
 
+  // Enhanced undo handler for all players
+  const handleUndoPreviousPlayer = useCallback(() => {
+    console.log("Undo previous player called");
+    
+    if (isEditingCurrentRound) {
+      console.log("Cannot undo in edit mode");
+      return; // Don't allow undo during edit mode
+    }
+    
+    const order = playerOrderForGame;
+    if (order.length === 0) {
+      console.log("No player order defined");
+      return;
+    }
+    
+    // Case 1: In bidding mode
+    if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId) {
+      const currentIndex = order.indexOf(currentPlayerBiddingId);
+      
+      // If first bidder, check if we can go to previous round's taking
+      if (currentPlayerBiddingId === firstBidderOfRoundId) {
+        // Only if we're not in the first round
+        if (currentRoundForInput > 1) {
+          console.log("First bidder - moving to previous round's taking phase");
+          
+          // Move to previous round
+          const previousRound = currentRoundForInput - 1;
+          setCurrentRoundForInput(previousRound);
+          
+          // Set to taking mode
+          setCurrentRoundInputMode('TAKING');
+          setCurrentRoundBidsConfirmed(true);
+          
+          // Calculate the last player in the previous round
+          const previousDealerIndex = (order.indexOf(currentDealerId!) - 1 + order.length) % order.length;
+          const previousRoundFirstBidderIndex = (previousDealerIndex + 1) % order.length;
+          const lastPlayerIndex = (previousRoundFirstBidderIndex - 1 + order.length) % order.length;
+          const lastPlayerId = order[lastPlayerIndex];
+          
+          // Set the current player to the last player of the previous round
+          setCurrentPlayerBiddingId(null);
+          setCurrentPlayerTakingId(lastPlayerId);
+        } else {
+          console.log("First round first bidder - nothing to undo");
+        }
+        return;
+      }
+      
+      // Regular case: move to previous bidder
+      const previousIndex = (currentIndex - 1 + order.length) % order.length;
+      const previousPlayerId = order[previousIndex];
+      console.log("Undoing to previous bidder:", previousPlayerId);
+      
+      // Reset the previous player's bid
+      setPlayersScoreData(prevData => {
+        console.log("Resetting bid for player:", previousPlayerId);
+        return prevData.map(pd => pd.playerId === previousPlayerId ? {
+          ...pd,
+          scores: pd.scores.map(s => s.roundNumber === currentRoundForInput ? 
+            { ...s, bid: null, roundScore: 0 } : s),
+        } : pd)
+        .map(p => ({ 
+          ...p,
+          totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
+        }));
+      });
+      
+      // Set the current player to the previous player
+      setCurrentPlayerBiddingId(previousPlayerId);
+    } 
+    // Case 2: In taking mode
+    else if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId) {
+      const currentIndex = order.indexOf(currentPlayerTakingId);
+      
+      // If first taker, move to bidding phase of the same round
+      if (currentPlayerTakingId === firstBidderOfRoundId) {
+        console.log("First taker - moving to bidding phase");
+        
+        // Move to bidding mode
+        setCurrentRoundInputMode('BIDDING');
+        setCurrentRoundBidsConfirmed(false);
+        
+        // Find the last bidder (dealer)
+        const dealerIndex = order.indexOf(currentDealerId!);
+        const lastBidderId = order[dealerIndex];
+        
+        // Set the current player to the last bidder
+        setCurrentPlayerTakingId(null);
+        setCurrentPlayerBiddingId(lastBidderId);
+        
+        return;
+      }
+      
+      // Regular case: move to previous taker
+      const previousIndex = (currentIndex - 1 + order.length) % order.length;
+      const previousPlayerId = order[previousIndex];
+      console.log("Undoing to previous taker:", previousPlayerId);
+      
+      // Reset the previous player's taken value
+      setPlayersScoreData(prevData => {
+        console.log("Resetting taken for player:", previousPlayerId);
+        return prevData.map(pd => pd.playerId === previousPlayerId ? {
+          ...pd,
+          scores: pd.scores.map(s => s.roundNumber === currentRoundForInput ? 
+            { ...s, taken: null, roundScore: 0 } : s),
+        } : pd)
+        .map(p => ({ 
+          ...p,
+          totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
+        }));
+      });
+      
+      // Set the current player to the previous player
+      setCurrentPlayerTakingId(previousPlayerId);
+    } else {
+      console.log("No active player to undo from. Mode:", currentRoundInputMode, 
+                  "Bidding player:", currentPlayerBiddingId, 
+                  "Taking player:", currentPlayerTakingId);
+    }
+  }, [
+    currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, 
+    playerOrderForGame, currentRoundForInput, firstBidderOfRoundId, 
+    isEditingCurrentRound, currentDealerId
+  ]);
+
   if (gamePhase === 'SETUP') {
     return <PlayerSetupForm players={players} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onStartGame={handleStartGame} />;
   }
@@ -570,7 +695,7 @@ export function GameManager() {
         onSubmitTaken={handleSubmitTaken}
         onConfirmBidsForRound={handleConfirmBidsForRound}
         onAdvanceRoundOrEndGame={handleAdvanceRoundOrEndGame}
-        onFinishGame={handleFinishGameEarly} // Now using the placeholder function
+        onFinishGame={handleFinishGameEarly}
         onRestartGame={handlePlayAgain}
         onSelectDealer={handleSelectDealer}
         // Pass new state and handlers for edit mode
@@ -581,6 +706,7 @@ export function GameManager() {
         onKeepPlayerValue={handleKeepPlayerValue}
         onSetActiveEditPlayerValue={handleSetActiveEditPlayerValue}
         onEditSpecificRound={handleEditSpecificRound}
+        onUndoPreviousPlayer={handleUndoPreviousPlayer}
       />
     );
   }
