@@ -19,8 +19,64 @@ interface PlayerSetupFormProps {
 
 export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartGame }: PlayerSetupFormProps) {
   const [playerName, setPlayerName] = useState('');
-  const [maxCardsInHand, setMaxCardsInHand] = useState('2'); // Default to 2
-  const [bidPoints, setBidPoints] = useState('10'); // Default to 10
+  // Get saved values from localStorage or use defaults
+  const [maxCardsInHand, setMaxCardsInHand] = useState(() => {
+    // First try to get from the dedicated config storage
+    const savedConfig = localStorage.getItem('updownRiverScorerConfig');
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        if (config.maxCardsDealtByUser && typeof config.maxCardsDealtByUser === 'number') {
+          return config.maxCardsDealtByUser.toString();
+        }
+      } catch (error) {
+        console.error("Failed to parse saved config:", error);
+      }
+    }
+    
+    // Fall back to the full state if available
+    const savedState = localStorage.getItem('updownRiverScorerState');
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState);
+        if (state.maxCardsDealtByUser && typeof state.maxCardsDealtByUser === 'number') {
+          return state.maxCardsDealtByUser.toString();
+        }
+      } catch (error) {
+        console.error("Failed to parse saved max cards value:", error);
+      }
+    }
+    return '7'; // Updated default to 7
+  });
+  
+  const [bidPoints, setBidPoints] = useState(() => {
+    // First try to get from the dedicated config storage
+    const savedConfig = localStorage.getItem('updownRiverScorerConfig');
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        if (config.bidPoints && typeof config.bidPoints === 'number') {
+          return config.bidPoints.toString();
+        }
+      } catch (error) {
+        console.error("Failed to parse saved config:", error);
+      }
+    }
+    
+    // Fall back to the full state if available
+    const savedState = localStorage.getItem('updownRiverScorerState');
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState);
+        if (state.bidPoints && typeof state.bidPoints === 'number') {
+          return state.bidPoints.toString();
+        }
+      } catch (error) {
+        console.error("Failed to parse saved bid points value:", error);
+      }
+    }
+    return '10'; // Default
+  });
   // const { toast } = useToast(); // Removed
   const startGameButtonRef = useRef<HTMLButtonElement>(null);
   const maxCardsInputRef = useRef<HTMLInputElement>(null);

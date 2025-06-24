@@ -92,6 +92,7 @@ export function NumberInputPad({
               size="sm"
               className={cn(
                 "text-base aspect-square h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0",
+                "text-lg sm:text-xl font-medium", // Increased text size
                 isInvalidByRule && "text-destructive border-destructive/50 hover:text-destructive hover:bg-destructive/10",
                 currentValue === num && isInvalidByRule && "bg-destructive/20 text-destructive border-destructive"
               )}

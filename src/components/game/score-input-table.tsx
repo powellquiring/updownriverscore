@@ -630,12 +630,12 @@ export function ScoreInputTable({
                     {(showConfirmBidsButton && onConfirmBidsForRound) || (showAdvanceRoundButton && onAdvanceRoundOrEndGame) ? (
                         <div className="flex w-full items-center justify-between gap-1 sm:gap-2">
                             <div className="flex flex-col w-full">
-                                <p className="text-xs sm:text-sm font-medium text-left mb-1">
+                                <p className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-left mb-1">
                                     {getHeaderTitle()}
                                 </p>
                                 <Button
                                     onClick={showConfirmBidsButton ? onConfirmBidsForRound : onAdvanceRoundOrEndGame}
-                                    className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs"
+                                    className="bg-accent hover:bg-accent/90 text-accent-foreground px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 text-xs sm:text-sm max-w-[45vw] md:max-w-xs text-base sm:text-lg md:text-xl"
                                 >
                                    {mainActionButtonText}
                                 </Button>
@@ -650,7 +650,7 @@ export function ScoreInputTable({
                         </div>
                     ) : isEditingCurrentRound && editingPlayerId && onKeepPlayerValue && onSetActiveEditPlayerValue && onToggleEditMode && !isPlayerValueUnderActiveEdit ? (
                         <div className="flex flex-col items-start w-full">
-                        <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
+                        <p className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-left mb-1 h-auto truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
                             {isPlayerValueUnderActiveEdit
                             ? `${numPadActionText}`
                             : `Reviewing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}: ${activeEditingPlayerCurrentValue}`
@@ -695,7 +695,7 @@ export function ScoreInputTable({
                     ) : (
                         <>
                             <div className="flex justify-between items-center w-full">
-                                <p className="text-xs sm:text-sm font-medium text-left mb-1 h-5 truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
+                                <p className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-left mb-1 h-auto truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
                                     {numPadActionText || " "}
                                 </p>
                                 {/* Add undo button here */}

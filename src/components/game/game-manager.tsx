@@ -72,7 +72,15 @@ export function GameManager() {
   // Add bidPoints state
   const [bidPoints, setBidPoints] = useState<number>(10);
   
+  // Add maxCardsDealtByUser state
+  const [maxCardsDealtByUser, setMaxCardsDealtByUser] = useState<number>(7);
+  
   const handlePlayAgain = useCallback(() => {
+    // Save the current values before resetting
+    const currentBidPoints = bidPoints;
+    const currentMaxCards = maxCardsDealtByUser;
+    
+    // Reset game state
     setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
     setGameRounds([]);
     setPlayersScoreData([]);
@@ -89,10 +97,21 @@ export function GameManager() {
     setIsEditingCurrentRound(false);
     setEditingPlayerId(null);
     setIsPlayerValueUnderActiveEdit(false);
-    setBidPoints(10); // Reset to default
-    localStorage.removeItem('updownRiverScorerState'); 
+    
+    // Restore the saved values
+    setBidPoints(currentBidPoints);
+    setMaxCardsDealtByUser(currentMaxCards);
+    
+    // Create a minimal state to save just the configuration values
+    const configToSave = {
+      bidPoints: currentBidPoints,
+      maxCardsDealtByUser: currentMaxCards
+    };
+    
+    // Remove the full game state but save the configuration
     localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
-  }, []);
+    localStorage.setItem('updownRiverScorerConfig', JSON.stringify(configToSave));
+  }, [bidPoints, maxCardsDealtByUser]);
 
 
   useEffect(() => {
@@ -130,6 +149,8 @@ export function GameManager() {
         setEditingPlayerId(state.editingPlayerId && typeof state.editingPlayerId === 'string' ? state.editingPlayerId : null);
         setIsPlayerValueUnderActiveEdit(state.isPlayerValueUnderActiveEdit === true);
 
+        if (state.bidPoints && typeof state.bidPoints === 'number') setBidPoints(state.bidPoints);
+        if (state.maxCardsDealtByUser && typeof state.maxCardsDealtByUser === 'number') setMaxCardsDealtByUser(state.maxCardsDealtByUser);
 
       } catch (error) {
         console.error("Failed to load saved state:", error);
@@ -157,11 +178,14 @@ export function GameManager() {
       players, gameRounds, playersScoreData, currentRoundForInput, gamePhase,
       firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId,
       currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed,
-      isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints, // Add bidPoints
+      isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints, maxCardsDealtByUser,
     };
     localStorage.setItem('updownRiverScorerState', JSON.stringify(stateToSave));
     if (gamePhase !== 'SETUP') localStorage.setItem('updownRiverScorerState_gameStartedOnce', 'true');
-  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints]);
+  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, 
+      currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, 
+      firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound, 
+      editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints, maxCardsDealtByUser]);
 
 
   const handleAddPlayer = useCallback((name: string) => {
@@ -181,6 +205,7 @@ export function GameManager() {
     }
     
     setBidPoints(bidPointsValue);
+    setMaxCardsDealtByUser(maxCardsDealtByUser);
     
     const roundsConfig = generateGameRounds(players.length, maxCardsDealtByUser);
     if (roundsConfig.length === 0) {
