@@ -590,42 +590,33 @@ export function ScoreInputTable({
                       const topScore = sortedPlayersForDisplay[0]?.totalScore || 0;
                       const playerScore = player.totalScore;
                       const scoreDifference = topScore > 0 ? (topScore - playerScore) / topScore : 0;
-                      
-                      // Map the score difference to a shade of green
-                      // 0% difference (top player) = darkest (emerald-200)
-                      // 100% difference = lightest (emerald-50/10)
-                      let rankStyle = "";
-                      
-                      if (scoreDifference === 0) {
-                        // Top player
-                        rankStyle = "bg-emerald-200";
-                      } else if (scoreDifference < 0.1) {
-                        // Very close to top (within 10%)
-                        rankStyle = "bg-emerald-100";
-                      } else if (scoreDifference < 0.25) {
-                        // Close to top (within 25%)
-                        rankStyle = "bg-emerald-50";
-                      } else if (scoreDifference < 0.5) {
-                        // Moderately behind (within 50%)
-                        rankStyle = "bg-emerald-50/60";
-                      } else if (scoreDifference < 0.75) {
-                        // Significantly behind (within 75%)
-                        rankStyle = "bg-emerald-50/40";
-                      } else {
-                        // Very far behind (more than 75%)
-                        rankStyle = "bg-emerald-50/20";
-                      }
+
+                      // Use algebra to determine the shade number (600 to 100)
+                      // Formula: 600 - (scoreDifference * 500)
+                      // This gives 600 for 0% difference and 100 for 100% difference
+                      const shadeNumber = Math.max(100, Math.min(600, Math.round(600 - (scoreDifference * 500))));
+
+                      // Map the calculated shade to specific Tailwind classes
+                      let bgColorClass = "";
+                      if (shadeNumber >= 600) bgColorClass = "bg-emerald-600";
+                      else if (shadeNumber >= 500) bgColorClass = "bg-emerald-500";
+                      else if (shadeNumber >= 400) bgColorClass = "bg-emerald-400";
+                      else if (shadeNumber >= 300) bgColorClass = "bg-emerald-300";
+                      else if (shadeNumber >= 200) bgColorClass = "bg-emerald-200";
+                      else bgColorClass = "bg-emerald-100";
 
                       return (
                         <TableCell
                           key={`total-${player.playerId}`}
                           className={cn(
-                            "text-center font-bold text-xs sm:text-sm p-0.5",
-                            rankStyle,
+                            "text-center font-bold p-0.5",
+                            bgColorClass,
                             player.playerId === activePlayerIdForColumnHighlight && gamePhase === 'SCORING' && "bg-secondary/30"
                           )}
                         >
-                          {player.totalScore}
+                          <span className="inline-block bg-white text-foreground px-2 py-0.5 rounded-sm text-xs sm:text-sm">
+                            {player.totalScore}
+                          </span>
                         </TableCell>
                       );
                     })}
