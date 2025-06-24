@@ -22,6 +22,11 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
   const [playerName, setPlayerName] = useState('');
   // Get saved values from localStorage or use defaults
   const [maxCardsInHand, setMaxCardsInHand] = useState(() => {
+    // Check if code is running in browser
+    if (typeof window === 'undefined') {
+      return DEFAULT_MAX_CARDS_DEALT.toString();
+    }
+    
     // First try to get from the dedicated config storage
     const savedConfig = localStorage.getItem(STORAGE_KEY_GAME_CONFIG);
     if (savedConfig) {
@@ -51,6 +56,11 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
   });
   
   const [bidPoints, setBidPoints] = useState(() => {
+    // Check if code is running in browser
+    if (typeof window === 'undefined') {
+      return DEFAULT_BID_POINTS.toString();
+    }
+    
     // First try to get from the dedicated config storage
     const savedConfig = localStorage.getItem(STORAGE_KEY_GAME_CONFIG);
     if (savedConfig) {

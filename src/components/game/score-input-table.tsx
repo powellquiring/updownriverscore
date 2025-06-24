@@ -408,8 +408,12 @@ export function ScoreInputTable({
                     )}
                    >
                     {gamePhase === 'DEALER_SELECTION' && onSelectDealer ? (
-                      <Button variant="ghost" className="w-full h-auto p-0 text-xs hover:bg-primary/20" onClick={() => onSelectDealer(player.playerId)}>
-                        <UserCheck className="mr-0.5 h-3 w-3 text-accent" /> {player.name}
+                      <Button 
+                        variant="outline" 
+                        className="w-full h-auto py-2 px-3 text-sm font-medium hover:bg-primary/20 hover:text-primary" 
+                        onClick={() => onSelectDealer(player.playerId)}
+                      >
+                        <UserCheck className="mr-1 h-4 w-4 text-accent" /> {player.name}
                       </Button>
                     ) : (
                       <>
@@ -581,20 +585,35 @@ export function ScoreInputTable({
                     <TableCell className="font-bold text-xs sm:text-sm text-right px-0.5 py-0.5">Total</TableCell>
                     {playersScoreData.map(player => {
                       const rank = getPlayerRank(player.playerId);
-                      let rankStyle = "text-primary-foreground";
-                      let awardIcon = null;
-
-                      if (rank === 0) {
-                        rankStyle = "text-yellow-500 font-bold border border-yellow-400 bg-yellow-500/10 rounded";
-                        awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-yellow-500" />;
-                      }
-                      else if (rank === 1) {
-                        rankStyle = "text-slate-400 font-semibold";
-                        awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-slate-400" />;
-                      }
-                      else if (rank === 2) {
-                        rankStyle = "text-orange-400 font-semibold";
-                        awardIcon = <Award className="inline-block h-3 w-3 sm:h-4 sm:w-4 ml-0.5 text-orange-400" />;
+                      
+                      // Calculate score difference as percentage of top score
+                      const topScore = sortedPlayersForDisplay[0]?.totalScore || 0;
+                      const playerScore = player.totalScore;
+                      const scoreDifference = topScore > 0 ? (topScore - playerScore) / topScore : 0;
+                      
+                      // Map the score difference to a shade of green
+                      // 0% difference (top player) = darkest (emerald-200)
+                      // 100% difference = lightest (emerald-50/10)
+                      let rankStyle = "";
+                      
+                      if (scoreDifference === 0) {
+                        // Top player
+                        rankStyle = "bg-emerald-200";
+                      } else if (scoreDifference < 0.1) {
+                        // Very close to top (within 10%)
+                        rankStyle = "bg-emerald-100";
+                      } else if (scoreDifference < 0.25) {
+                        // Close to top (within 25%)
+                        rankStyle = "bg-emerald-50";
+                      } else if (scoreDifference < 0.5) {
+                        // Moderately behind (within 50%)
+                        rankStyle = "bg-emerald-50/60";
+                      } else if (scoreDifference < 0.75) {
+                        // Significantly behind (within 75%)
+                        rankStyle = "bg-emerald-50/40";
+                      } else {
+                        // Very far behind (more than 75%)
+                        rankStyle = "bg-emerald-50/20";
                       }
 
                       return (
@@ -606,7 +625,7 @@ export function ScoreInputTable({
                             player.playerId === activePlayerIdForColumnHighlight && gamePhase === 'SCORING' && "bg-secondary/30"
                           )}
                         >
-                          {player.totalScore} {awardIcon}
+                          {player.totalScore}
                         </TableCell>
                       );
                     })}

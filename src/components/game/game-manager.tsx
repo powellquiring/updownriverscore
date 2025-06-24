@@ -112,56 +112,59 @@ export function GameManager() {
     // Remove the full game state but save the configuration
     localStorage.removeItem(STORAGE_KEY_GAME_STARTED);
     localStorage.setItem(STORAGE_KEY_GAME_CONFIG, JSON.stringify(configToSave));
-  }, [bidPoints, maxCardsDealtByUser]);
+  }, []); // Empty dependency array
 
 
   useEffect(() => {
-    const savedState = localStorage.getItem(STORAGE_KEY_GAME_STATE);
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState);
-        if (state.players && Array.isArray(state.players) && state.players.length > 0) setPlayers(state.players);
-        else setPlayers(defaultPlayers);
-        
-        let loadedGamePhase: GamePhase = 'SETUP';
-        if (state.gamePhase && typeof state.gamePhase === 'string') {
-            loadedGamePhase = state.gamePhase as GamePhase;
-            setGamePhase(loadedGamePhase);
-        } else setGamePhase('SETUP'); 
+    const loadSavedState = () => {
+      const savedState = localStorage.getItem(STORAGE_KEY_GAME_STATE);
+      if (savedState) {
+        try {
+          const state = JSON.parse(savedState);
+          if (state.players && Array.isArray(state.players) && state.players.length > 0) setPlayers(state.players);
+          else setPlayers(defaultPlayers);
+          
+          let loadedGamePhase: GamePhase = 'SETUP';
+          if (state.gamePhase && typeof state.gamePhase === 'string') {
+              loadedGamePhase = state.gamePhase as GamePhase;
+              setGamePhase(loadedGamePhase);
+          } else setGamePhase('SETUP'); 
 
-        if (loadedGamePhase !== 'SETUP' && state.gameRounds && Array.isArray(state.gameRounds) && state.gameRounds.length > 0 && state.gameRounds[0]?.cardsDealt) {
-            setGameRounds(state.gameRounds);
-        } else if (loadedGamePhase === 'SETUP') setGameRounds([]);
+          if (loadedGamePhase !== 'SETUP' && state.gameRounds && Array.isArray(state.gameRounds) && state.gameRounds.length > 0 && state.gameRounds[0]?.cardsDealt) {
+              setGameRounds(state.gameRounds);
+          } else if (loadedGamePhase === 'SETUP') setGameRounds([]);
 
-        if (state.playersScoreData && Array.isArray(state.playersScoreData)) setPlayersScoreData(state.playersScoreData);
-        if (state.currentRoundForInput && typeof state.currentRoundForInput === 'number') setCurrentRoundForInput(state.currentRoundForInput);
-        if (state.firstDealerPlayerId && typeof state.firstDealerPlayerId === 'string') setFirstDealerPlayerId(state.firstDealerPlayerId);
-        
-        setCurrentRoundInputMode(state.currentRoundInputMode === 'TAKING' ? 'TAKING' : 'BIDDING');
-        
-        if (state.playerOrderForGame && Array.isArray(state.playerOrderForGame)) setPlayerOrderForGame(state.playerOrderForGame);
-        if (state.currentDealerId && typeof state.currentDealerId === 'string') setCurrentDealerId(state.currentDealerId);
-        if (state.currentPlayerBiddingId && typeof state.currentPlayerBiddingId === 'string') setCurrentPlayerBiddingId(state.currentPlayerBiddingId);
-        if (state.firstBidderOfRoundId && typeof state.firstBidderOfRoundId === 'string') setFirstBidderOfRoundId(state.firstBidderOfRoundId);
-        if (state.currentPlayerTakingId && typeof state.currentPlayerTakingId === 'string') setCurrentPlayerTakingId(state.currentPlayerTakingId);
-        setCurrentRoundBidsConfirmed(state.currentRoundBidsConfirmed === true);
+          if (state.playersScoreData && Array.isArray(state.playersScoreData)) setPlayersScoreData(state.playersScoreData);
+          if (state.currentRoundForInput && typeof state.currentRoundForInput === 'number') setCurrentRoundForInput(state.currentRoundForInput);
+          if (state.firstDealerPlayerId && typeof state.firstDealerPlayerId === 'string') setFirstDealerPlayerId(state.firstDealerPlayerId);
+          
+          setCurrentRoundInputMode(state.currentRoundInputMode === 'TAKING' ? 'TAKING' : 'BIDDING');
+          
+          if (state.playerOrderForGame && Array.isArray(state.playerOrderForGame)) setPlayerOrderForGame(state.playerOrderForGame);
+          if (state.currentDealerId && typeof state.currentDealerId === 'string') setCurrentDealerId(state.currentDealerId);
+          if (state.currentPlayerBiddingId && typeof state.currentPlayerBiddingId === 'string') setCurrentPlayerBiddingId(state.currentPlayerBiddingId);
+          if (state.firstBidderOfRoundId && typeof state.firstBidderOfRoundId === 'string') setFirstBidderOfRoundId(state.firstBidderOfRoundId);
+          if (state.currentPlayerTakingId && typeof state.currentPlayerTakingId === 'string') setCurrentPlayerTakingId(state.currentPlayerTakingId);
+          setCurrentRoundBidsConfirmed(state.currentRoundBidsConfirmed === true);
 
-        setIsEditingCurrentRound(state.isEditingCurrentRound === true);
-        setEditingPlayerId(state.editingPlayerId && typeof state.editingPlayerId === 'string' ? state.editingPlayerId : null);
-        setIsPlayerValueUnderActiveEdit(state.isPlayerValueUnderActiveEdit === true);
+          setIsEditingCurrentRound(state.isEditingCurrentRound === true);
+          setEditingPlayerId(state.editingPlayerId && typeof state.editingPlayerId === 'string' ? state.editingPlayerId : null);
+          setIsPlayerValueUnderActiveEdit(state.isPlayerValueUnderActiveEdit === true);
 
-        if (state.bidPoints && typeof state.bidPoints === 'number') setBidPoints(state.bidPoints);
-        if (state.maxCardsDealtByUser && typeof state.maxCardsDealtByUser === 'number') setMaxCardsDealtByUser(state.maxCardsDealtByUser);
-
-      } catch (error) {
-        console.error("Failed to load saved state:", error);
-        localStorage.removeItem(STORAGE_KEY_GAME_STATE); 
-        setGamePhase('SETUP'); 
-        setPlayers(defaultPlayers);
-        handlePlayAgain(); 
+          if (state.bidPoints && typeof state.bidPoints === 'number') setBidPoints(state.bidPoints);
+          if (state.maxCardsDealtByUser && typeof state.maxCardsDealtByUser === 'number') setMaxCardsDealtByUser(state.maxCardsDealtByUser);
+        } catch (error) {
+          console.error("Failed to load saved state:", error);
+          localStorage.removeItem(STORAGE_KEY_GAME_STATE); 
+          setGamePhase('SETUP'); 
+          setPlayers(defaultPlayers);
+        }
       }
-    }
-  }, [handlePlayAgain]); 
+    };
+    
+    // Only load state once when component mounts
+    loadSavedState();
+  }, []); // Empty dependency array - only run once on mount
 
   useEffect(() => {
     if (gamePhase === 'SETUP' && 
