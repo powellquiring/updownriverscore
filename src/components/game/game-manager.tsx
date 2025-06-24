@@ -6,6 +6,7 @@ import type { Player, GameRoundInfo, PlayerScoreData, RoundScoreEntry, GamePhase
 import { PlayerSetupForm } from './player-setup-form';
 import { ScoreInputTable } from './score-input-table';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
+import { DEFAULT_MAX_CARDS_DEALT, DEFAULT_BID_POINTS, STORAGE_KEY_GAME_STATE, STORAGE_KEY_GAME_CONFIG, STORAGE_KEY_GAME_STARTED } from '@/lib/constants';
 
 // Helper function to generate rounds configuration
 const generateGameRounds = (numPlayers: number, maxCardsDealtByUser: number): GameRoundInfo[] => {
@@ -70,10 +71,10 @@ export function GameManager() {
   } | null>(null);
   
   // Add bidPoints state
-  const [bidPoints, setBidPoints] = useState<number>(10);
+  const [bidPoints, setBidPoints] = useState<number>(DEFAULT_BID_POINTS);
   
   // Add maxCardsDealtByUser state
-  const [maxCardsDealtByUser, setMaxCardsDealtByUser] = useState<number>(7);
+  const [maxCardsDealtByUser, setMaxCardsDealtByUser] = useState<number>(DEFAULT_MAX_CARDS_DEALT);
   
   const handlePlayAgain = useCallback(() => {
     // Save the current values before resetting
@@ -109,13 +110,13 @@ export function GameManager() {
     };
     
     // Remove the full game state but save the configuration
-    localStorage.removeItem('updownRiverScorerState_gameStartedOnce');
-    localStorage.setItem('updownRiverScorerConfig', JSON.stringify(configToSave));
+    localStorage.removeItem(STORAGE_KEY_GAME_STARTED);
+    localStorage.setItem(STORAGE_KEY_GAME_CONFIG, JSON.stringify(configToSave));
   }, [bidPoints, maxCardsDealtByUser]);
 
 
   useEffect(() => {
-    const savedState = localStorage.getItem('updownRiverScorerState');
+    const savedState = localStorage.getItem(STORAGE_KEY_GAME_STATE);
     if (savedState) {
       try {
         const state = JSON.parse(savedState);
@@ -154,7 +155,7 @@ export function GameManager() {
 
       } catch (error) {
         console.error("Failed to load saved state:", error);
-        localStorage.removeItem('updownRiverScorerState'); 
+        localStorage.removeItem(STORAGE_KEY_GAME_STATE); 
         setGamePhase('SETUP'); 
         setPlayers(defaultPlayers);
         handlePlayAgain(); 
@@ -170,7 +171,7 @@ export function GameManager() {
         currentRoundInputMode === 'BIDDING' &&
         !currentRoundBidsConfirmed &&
         !isEditingCurrentRound &&
-        !localStorage.getItem('updownRiverScorerState_gameStartedOnce')) {
+        !localStorage.getItem(STORAGE_KEY_GAME_STARTED)) {
       return;
     }
 
@@ -180,8 +181,8 @@ export function GameManager() {
       currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed,
       isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints, maxCardsDealtByUser,
     };
-    localStorage.setItem('updownRiverScorerState', JSON.stringify(stateToSave));
-    if (gamePhase !== 'SETUP') localStorage.setItem('updownRiverScorerState_gameStartedOnce', 'true');
+    localStorage.setItem(STORAGE_KEY_GAME_STATE, JSON.stringify(stateToSave));
+    if (gamePhase !== 'SETUP') localStorage.setItem(STORAGE_KEY_GAME_STARTED, 'true');
   }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, 
       currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, 
       firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound, 

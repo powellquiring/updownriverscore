@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { PlusCircle, UserMinus, Users, Settings, Gamepad2 } from 'lucide-react';
 import type { Player } from '@/lib/types';
 // import { useToast } from '@/hooks/use-toast'; // Removed
+import { DEFAULT_MAX_CARDS_DEALT, DEFAULT_BID_POINTS, STORAGE_KEY_GAME_STATE, STORAGE_KEY_GAME_CONFIG } from '@/lib/constants';
 
 interface PlayerSetupFormProps {
   players: Player[];
@@ -22,7 +23,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
   // Get saved values from localStorage or use defaults
   const [maxCardsInHand, setMaxCardsInHand] = useState(() => {
     // First try to get from the dedicated config storage
-    const savedConfig = localStorage.getItem('updownRiverScorerConfig');
+    const savedConfig = localStorage.getItem(STORAGE_KEY_GAME_CONFIG);
     if (savedConfig) {
       try {
         const config = JSON.parse(savedConfig);
@@ -35,7 +36,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     }
     
     // Fall back to the full state if available
-    const savedState = localStorage.getItem('updownRiverScorerState');
+    const savedState = localStorage.getItem(STORAGE_KEY_GAME_STATE);
     if (savedState) {
       try {
         const state = JSON.parse(savedState);
@@ -46,12 +47,12 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
         console.error("Failed to parse saved max cards value:", error);
       }
     }
-    return '7'; // Updated default to 7
+    return DEFAULT_MAX_CARDS_DEALT.toString();
   });
   
   const [bidPoints, setBidPoints] = useState(() => {
     // First try to get from the dedicated config storage
-    const savedConfig = localStorage.getItem('updownRiverScorerConfig');
+    const savedConfig = localStorage.getItem(STORAGE_KEY_GAME_CONFIG);
     if (savedConfig) {
       try {
         const config = JSON.parse(savedConfig);
@@ -64,7 +65,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     }
     
     // Fall back to the full state if available
-    const savedState = localStorage.getItem('updownRiverScorerState');
+    const savedState = localStorage.getItem(STORAGE_KEY_GAME_STATE);
     if (savedState) {
       try {
         const state = JSON.parse(savedState);
@@ -75,7 +76,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
         console.error("Failed to parse saved bid points value:", error);
       }
     }
-    return '10'; // Default
+    return DEFAULT_BID_POINTS.toString();
   });
   // const { toast } = useToast(); // Removed
   const startGameButtonRef = useRef<HTMLButtonElement>(null);
