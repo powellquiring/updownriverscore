@@ -1,4 +1,3 @@
-
 export interface Player {
   id: string;
   name: string;
@@ -56,5 +55,8 @@ export interface ScoreInputTableProps {
   onToggleEditMode?: () => void;
   onKeepPlayerValue?: () => void;
   onSetActiveEditPlayerValue?: (active: boolean) => void;
+  onEditSpecificRound?: (roundNumber: number, mode: CurrentRoundInputMode) => void;
+  onUndoPreviousPlayer?: () => void;
+  isGameOver?: boolean;
 }
 

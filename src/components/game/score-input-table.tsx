@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -43,6 +42,7 @@ export function ScoreInputTable({
   onSetActiveEditPlayerValue,
   onEditSpecificRound,
   onUndoPreviousPlayer,
+  isGameOver,
 }: ScoreInputTableProps) {
   // Add state for the confirmation dialog
   const [showRestartConfirmation, setShowRestartConfirmation] = useState(false);
@@ -192,7 +192,7 @@ export function ScoreInputTable({
 
   if (gamePhase === 'SCORING' && !currentRoundConfig && gameRounds.length > 0 && currentRoundForInput <= gameRounds.length ) return <p>Loading round configuration...</p>;
 
-  const roundsToDisplay = (currentRoundForInput > gameRounds.length && gameRounds.length > 0)
+  const roundsToDisplay = (isGameOver && gameRounds.length > 0)
     ? gameRounds
     : gameRounds.filter(roundInfo => roundInfo.roundNumber <= currentRoundForInput);
 
@@ -203,7 +203,7 @@ export function ScoreInputTable({
     }
 
     if (gamePhase === 'SCORING') {
-      if (currentRoundForInput > gameRounds.length && gameRounds.length > 0) {
+      if (isGameOver && gameRounds.length > 0) {
         return "Final Scores";
       }
 
@@ -212,14 +212,18 @@ export function ScoreInputTable({
       }
 
       const cardsDealt = currentRoundConfig.cardsDealt;
-      let playerCurrentValue: number | string | null = '-';
+      let playerCurrentValue: string | number | null = null;
 
       if (isEditingCurrentRound && editingPlayerId) {
         const playerBeingEditedName = allPlayers.find(p => p.id === editingPlayerId)?.name || "Player";
         const editType = currentRoundInputMode === 'BIDDING' ? "Bid" : "Tricks";
         const scoreEntry = playersScoreData.find(p => p.playerId === editingPlayerId)
           ?.scores.find(s => s.roundNumber === currentRoundForInput);
-        playerCurrentValue = currentRoundInputMode === 'BIDDING' ? scoreEntry?.bid : scoreEntry?.taken;
+        if (currentRoundInputMode === 'BIDDING') {
+          playerCurrentValue = (typeof scoreEntry?.bid === 'number' ? scoreEntry.bid : null);
+        } else {
+          playerCurrentValue = (typeof scoreEntry?.taken === 'number' ? scoreEntry.taken : null);
+        }
         return `Editing ${editType} for ${playerBeingEditedName} - ${cardsDealt} cards / ${playerCurrentValue ?? '-'}`;
       }
 
@@ -256,7 +260,7 @@ export function ScoreInputTable({
 
 
   const getTableCaption = () => {
-    if (currentRoundForInput > gameRounds.length && gameRounds.length > 0) return "Game Over! Final scores are displayed. Press 'Restart Game' to play again.";
+    if (isGameOver && gameRounds.length > 0) return "Game Over! Final scores are displayed. Press 'Restart Game' to play again.";
     if (gamePhase === 'DEALER_SELECTION') return "Click player's name to select as first dealer.";
     if (gamePhase === 'SCORING') {
       if (isEditingCurrentRound && !isPlayerValueUnderActiveEdit && editingPlayerId) {
@@ -334,21 +338,22 @@ export function ScoreInputTable({
       const scoreEntry = player?.scores.find(s => s.roundNumber === currentRoundForInput);
 
       if (currentRoundInputMode === 'BIDDING') {
-        activeEditingPlayerCurrentValue = scoreEntry?.bid ?? 'N/A';
+        activeEditingPlayerCurrentValue = (typeof scoreEntry?.bid === 'number' ? scoreEntry.bid : '-');
         numPadActionText = `Editing Bid for ${activeEditingPlayerName}`;
-        numPadCurrentValue = scoreEntry?.bid ?? null;
+        numPadCurrentValue = (typeof scoreEntry?.bid === 'number' ? scoreEntry.bid : null);
         numPadIsInvalidFn = getIsBidInvalid(currentRoundConfig, editingPlayerId);
       } else {
-        activeEditingPlayerCurrentValue = scoreEntry?.taken ?? 'N/A';
+        activeEditingPlayerCurrentValue = (typeof scoreEntry?.taken === 'number' ? scoreEntry.taken : '-');
         numPadActionText = `Editing Tricks for ${activeEditingPlayerName}`;
-        numPadCurrentValue = scoreEntry?.taken ?? null;
+        numPadCurrentValue = (typeof scoreEntry?.taken === 'number' ? scoreEntry.taken : null);
         numPadIsInvalidFn = getIsTakenInvalid(currentRoundConfig, editingPlayerId);
       }
 
     } else if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId) {
       numPadDisabledGlobally = false;
       const player = playersScoreData.find(p => p.playerId === currentPlayerBiddingId);
-      numPadCurrentValue = player?.scores.find(s => s.roundNumber === currentRoundForInput)?.bid ?? null;
+      const bidValue = player?.scores.find(s => s.roundNumber === currentRoundForInput)?.bid;
+      numPadCurrentValue = (typeof bidValue === 'number' ? bidValue : null);
       numPadIsInvalidFn = getIsBidInvalid(currentRoundConfig, currentPlayerBiddingId);
       numPadPlayerName = allPlayers.find(p => p.id === currentPlayerBiddingId)?.name || "";
       // numPadActionText = `Bid: ${numPadPlayerName}`;
@@ -356,7 +361,8 @@ export function ScoreInputTable({
     } else if (currentRoundInputMode === 'TAKING' && currentPlayerTakingId) {
       numPadDisabledGlobally = false;
       const player = playersScoreData.find(p => p.playerId === currentPlayerTakingId);
-      numPadCurrentValue = player?.scores.find(s => s.roundNumber === currentRoundForInput)?.taken ?? null;
+      const takenValue = player?.scores.find(s => s.roundNumber === currentRoundForInput)?.taken;
+      numPadCurrentValue = (typeof takenValue === 'number' ? takenValue : null);
       numPadIsInvalidFn = getIsTakenInvalid(currentRoundConfig, currentPlayerTakingId);
       numPadPlayerName = allPlayers.find(p => p.id === currentPlayerTakingId)?.name || "";
       numPadActionText = getHeaderTitle();
@@ -366,12 +372,16 @@ export function ScoreInputTable({
         numPadActionText = "";
         numPadDisabledGlobally = true;
     } else if (currentRoundInputMode === 'TAKING' && !currentPlayerTakingId && currentRoundBidsConfirmed) {
-        showAdvanceRoundButton = true;
-        const nextDealerName = getNextDealerName();
-        const cardsDealtNextRound = gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || '';
-        mainActionButtonText = currentRoundForInput < gameRounds.length
-            ? `${nextDealerName}: Deal ${cardsDealtNextRound} cards`
-            : "Show Final Scores";
+        // Only show advance round button if not game over
+        if (currentRoundForInput < gameRounds.length) {
+          showAdvanceRoundButton = true;
+          const nextDealerName = getNextDealerName();
+          const cardsDealtNextRound = gameRounds.find(r => r.roundNumber === currentRoundForInput + 1)?.cardsDealt || '';
+          mainActionButtonText = `${nextDealerName}: Deal ${cardsDealtNextRound} cards`;
+        } else {
+          showAdvanceRoundButton = false;
+          mainActionButtonText = '';
+        }
         numPadActionText = "";
         numPadDisabledGlobally = true;
     } else {
@@ -425,7 +435,7 @@ export function ScoreInputTable({
                   </TableHead>
                 ))}
               </TableRow>
-               {(gamePhase === 'SCORING' || (currentRoundForInput > gameRounds.length && gameRounds.length > 0)) && playersScoreData.length > 0 && (
+               {(gamePhase === 'SCORING' || (isGameOver && gameRounds.length > 0)) && playersScoreData.length > 0 && (
                  <TableRow className="border-b-0">
                     <TableHead
                         className="text-xs text-left text-muted-foreground py-0 px-0.5 sm:px-1"
@@ -441,7 +451,7 @@ export function ScoreInputTable({
                 </TableRow>
               )}
             </TableHeader>
-            {(gamePhase === 'SCORING' || (currentRoundForInput > gameRounds.length && gameRounds.length > 0)) && (gameRounds.length > 0 || playersScoreData.length > 0 ) && (
+            {(gamePhase === 'SCORING' || (isGameOver && gameRounds.length > 0)) && (gameRounds.length > 0 || playersScoreData.length > 0 ) && (
               <>
                 <TableBody>
                   {roundsToDisplay.map((roundInfo) => {
@@ -527,6 +537,13 @@ export function ScoreInputTable({
                           }
 
                           const dealerForThisSpecificRound = isDealerForRound(player.playerId, roundInfo.roundNumber, firstDealerPlayerId, playerOrderForGame);
+                          let isPreviousDealer = false;
+                          if (roundInfo.roundNumber > 1 && firstDealerPlayerId && playerOrderForGame.length > 0) {
+                            const firstDealerIndex = playerOrderForGame.indexOf(firstDealerPlayerId);
+                            const prevDealerIndex = (firstDealerIndex + (roundInfo.roundNumber - 2)) % playerOrderForGame.length;
+                            const prevDealerId = playerOrderForGame[prevDealerIndex];
+                            isPreviousDealer = player.playerId === prevDealerId && !dealerForThisSpecificRound;
+                          }
 
                           const isActiveForBidding = isPlayerActiveForBiddingLive(player.playerId, roundInfo.roundNumber);
                           const isActiveForTaking = isPlayerActiveForTakingLive(player.playerId, roundInfo.roundNumber);
@@ -541,7 +558,8 @@ export function ScoreInputTable({
                                 className={cn(
                                     "text-center align-middle py-0 px-0",
                                     player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30",
-                                    dealerForThisSpecificRound && "bg-primary/20 border-l border-r border-primary/30"
+                                    dealerForThisSpecificRound && "bg-primary/20 border-l border-r border-primary/30",
+                                    isPreviousDealer && "bg-primary/40 border-l border-r border-primary/40"
                                 )}
                             >
                                   <div
@@ -610,8 +628,7 @@ export function ScoreInputTable({
                           key={`total-${player.playerId}`}
                           className={cn(
                             "text-center font-bold p-0.5",
-                            bgColorClass,
-                            player.playerId === activePlayerIdForColumnHighlight && gamePhase === 'SCORING' && "bg-secondary/30"
+                            bgColorClass
                           )}
                         >
                           <span className="inline-block bg-white text-foreground px-2 py-0.5 rounded-sm text-xs sm:text-sm">
@@ -628,7 +645,7 @@ export function ScoreInputTable({
         </div>
       </CardContent>
 
-      {gamePhase === 'SCORING' && currentRoundConfig && currentRoundForInput <= gameRounds.length && (
+      {gamePhase === 'SCORING' && (
         <div id="control-panel-sticky-footer" className="mt-auto p-1 sm:p-2 md:p-3 border-t bg-background sticky bottom-0 shadow-md z-10">
            <div id="control-panel-main-flex-container" className="flex flex-row items-center justify-start gap-3 w-full">
 
@@ -663,10 +680,10 @@ export function ScoreInputTable({
                         <p className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-left mb-1 h-auto truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
                             {isPlayerValueUnderActiveEdit
                             ? `${numPadActionText}`
-                            : `Reviewing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}: ${activeEditingPlayerCurrentValue}`
+                            : `Reviewing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}: ${activeEditingPlayerCurrentValue === 'N/A' ? '-' : activeEditingPlayerCurrentValue}`
                             }
                         </p>
-                        {isPlayerValueUnderActiveEdit ? (
+                        {isPlayerValueUnderActiveEdit && currentRoundConfig && !isGameOver ? (
                             <NumberInputPad
                                 min={0}
                                 max={currentRoundConfig.cardsDealt}
@@ -703,12 +720,40 @@ export function ScoreInputTable({
                         )}
                         </div>
                     ) : (
+                        isGameOver || !currentRoundConfig ? (
+                          <div className="flex flex-col items-center w-full justify-center py-4 gap-2">
+                            <p className="text-2xl font-bold text-center text-destructive mb-2">Game Over</p>
+                            <div className="flex flex-row gap-2 items-center justify-center">
+                              {onUndoPreviousPlayer && (
+                                <Button 
+                                  onClick={() => {
+                                    console.log("Undo button clicked");
+                                    onUndoPreviousPlayer();
+                                  }} 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="mb-1"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 h-3 w-3">
+                                    <path d="M9 14 4 9l5-5"/>
+                                    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+                                  </svg>
+                                  Undo
+                                </Button>
+                              )}
+                              {onToggleEditMode && (
+                                <Button onClick={onToggleEditMode} variant="outline" size="sm" className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
+                                  <Edit className="mr-1 h-3 w-3 sm:mr-1.5 sm:h-4 sm:w-4" /> Edit Entries
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
                         <>
                             <div className="flex justify-between items-center w-full">
                                 <p className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-left mb-1 h-auto truncate max-w-[70vw] sm:max-w-[60vw] md:max-w-md">
                                     {numPadActionText || " "}
                                 </p>
-                                {/* Add undo button here */}
                                 {((currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId) || 
                                   (currentRoundInputMode === 'TAKING' && currentPlayerTakingId)) && 
                                   !isEditingCurrentRound && onUndoPreviousPlayer && (
@@ -729,32 +774,35 @@ export function ScoreInputTable({
                                     </Button>
                                 )}
                             </div>
-                            <NumberInputPad
+                            {currentRoundConfig && !isGameOver ? (
+                              <NumberInputPad
                                 min={0}
                                 max={currentRoundConfig.cardsDealt}
                                 onSelectNumber={(value) => {
-                                    const activePlayerIdForSubmission = isEditingCurrentRound && editingPlayerId 
-                                        ? editingPlayerId 
-                                        : (currentRoundInputMode === 'BIDDING' ? currentPlayerBiddingId : currentPlayerTakingId);
-                                    if (activePlayerIdForSubmission) {
-                                        if (currentRoundInputMode === 'BIDDING') {
-                                            onSubmitBid(activePlayerIdForSubmission, value.toString());
-                                        } else {
-                                            onSubmitTaken(activePlayerIdForSubmission, value.toString());
-                                        }
+                                  const activePlayerIdForSubmission = isEditingCurrentRound && editingPlayerId 
+                                    ? editingPlayerId 
+                                    : (currentRoundInputMode === 'BIDDING' ? currentPlayerBiddingId : currentPlayerTakingId);
+                                  if (activePlayerIdForSubmission) {
+                                    if (currentRoundInputMode === 'BIDDING') {
+                                      onSubmitBid(activePlayerIdForSubmission, value.toString());
+                                    } else {
+                                      onSubmitTaken(activePlayerIdForSubmission, value.toString());
                                     }
+                                  }
                                 }}
                                 currentValue={
-                                    currentRoundInputMode === 'TAKING' && numPadCurrentValue === null
-                                        ? playersScoreData.find(p => p.playerId === (isEditingCurrentRound ? editingPlayerId : currentPlayerTakingId))
-                                            ?.scores.find(s => s.roundNumber === currentRoundForInput)?.bid ?? null
-                                        : numPadCurrentValue
+                                  currentRoundInputMode === 'TAKING' && numPadCurrentValue === null
+                                    ? playersScoreData.find(p => p.playerId === (isEditingCurrentRound ? editingPlayerId : currentPlayerTakingId))
+                                        ?.scores.find(s => s.roundNumber === currentRoundForInput)?.bid ?? null
+                                    : numPadCurrentValue
                                 }
                                 disabled={numPadDisabledGlobally}
                                 isNumberInvalid={numPadIsInvalidFn}
                                 className="max-w-[75vw] sm:max-w-[66vw] md:max-w-none"
-                            />
+                              />
+                            ) : null}
                         </>
+                        )
                     )}
                 </div>
            </div>
@@ -762,7 +810,7 @@ export function ScoreInputTable({
       )}
 
 
-      {(gamePhase === 'SCORING' || (currentRoundForInput > gameRounds.length && gameRounds.length > 0)) && (
+      {(gamePhase === 'SCORING' || (isGameOver && gameRounds.length > 0)) && (
         <div className="px-1 md:px-0 mt-2 pb-2 flex flex-row justify-between items-center gap-1 md:gap-2">
           <Button onClick={handleRestartClick} variant="outline" size="sm" className="w-full max-w-full md:max-w-[33vw] text-xs">
             <RefreshCw className="mr-1 h-3 w-3" /> Restart Game

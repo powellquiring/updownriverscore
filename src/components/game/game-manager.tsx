@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -76,6 +75,20 @@ export function GameManager() {
   // Add maxCardsDealtByUser state
   const [maxCardsDealtByUser, setMaxCardsDealtByUser] = useState<number>(DEFAULT_MAX_CARDS_DEALT);
   
+  // Helper to load config from localStorage
+  const loadConfigFromStorage = useCallback(() => {
+    const configStr = localStorage.getItem(STORAGE_KEY_GAME_CONFIG);
+    if (configStr) {
+      try {
+        const config = JSON.parse(configStr);
+        if (typeof config.bidPoints === 'number') setBidPoints(config.bidPoints);
+        if (typeof config.maxCardsDealtByUser === 'number') setMaxCardsDealtByUser(config.maxCardsDealtByUser);
+      } catch (e) {
+        // Ignore parse errors, use defaults
+      }
+    }
+  }, []);
+
   const handlePlayAgain = useCallback(() => {
     // Save the current values before resetting
     const currentBidPoints = bidPoints;
@@ -112,8 +125,12 @@ export function GameManager() {
     // Remove the full game state but save the configuration
     localStorage.removeItem(STORAGE_KEY_GAME_STARTED);
     localStorage.setItem(STORAGE_KEY_GAME_CONFIG, JSON.stringify(configToSave));
-  }, []); // Empty dependency array
 
+    // After resetting, load config from storage (in case user had changed it)
+    setTimeout(() => {
+      loadConfigFromStorage();
+    }, 0);
+  }, [bidPoints, maxCardsDealtByUser, loadConfigFromStorage]); // Add dependencies
 
   useEffect(() => {
     const loadSavedState = () => {
@@ -159,12 +176,15 @@ export function GameManager() {
           setGamePhase('SETUP'); 
           setPlayers(defaultPlayers);
         }
+      } else {
+        // If no saved state, but in setup phase, try to load config
+        loadConfigFromStorage();
       }
     };
     
     // Only load state once when component mounts
     loadSavedState();
-  }, []); // Empty dependency array - only run once on mount
+  }, [loadConfigFromStorage]); // Add loadConfigFromStorage as dependency
 
   useEffect(() => {
     if (gamePhase === 'SETUP' && 
@@ -334,6 +354,11 @@ export function GameManager() {
     console.log("Bids Confirmed! Now enter tricks taken.");
   }, [currentPlayerBiddingId, currentRoundBidsConfirmed, firstBidderOfRoundId, isEditingCurrentRound, currentRoundForInput]);
 
+  // Helper to determine if the game is over
+  const isGameOver = gameRounds.length > 0 && currentRoundForInput === gameRounds.length && playersScoreData.length > 0 && playersScoreData.every(player => {
+    const lastRoundScore = player.scores.find(s => s.roundNumber === currentRoundForInput);
+    return lastRoundScore && lastRoundScore.taken !== null;
+  });
 
   const handleAdvanceRoundOrEndGame = useCallback(() => {
     if (isEditingCurrentRound) {
@@ -343,23 +368,19 @@ export function GameManager() {
     if (currentRoundForInput < gameRounds.length) {
       const newRoundNumber = currentRoundForInput + 1;
       setCurrentRoundForInput(newRoundNumber);
-      
       const order = playerOrderForGame;
       const previousDealerIndex = order.indexOf(currentDealerId!); 
       const newDealerId = order[(previousDealerIndex + 1) % order.length];
       setCurrentDealerId(newDealerId);
-      
       const newDealerIndexInOrder = order.indexOf(newDealerId);
       const newFirstBidderId = order[(newDealerIndexInOrder + 1) % order.length];
       setCurrentPlayerBiddingId(newFirstBidderId);
       setFirstBidderOfRoundId(newFirstBidderId);
-      
       setCurrentRoundInputMode('BIDDING');
       setCurrentRoundBidsConfirmed(false); 
-      
       console.log(`Starting Round ${newRoundNumber}.`);
     } else { 
-      // Game is complete but we stay in SCORING phase
+      // Game is complete, do not increment currentRoundForInput
       setCurrentPlayerBiddingId(null);
       setCurrentPlayerTakingId(null);
       setCurrentRoundInputMode('BIDDING'); 
@@ -696,10 +717,39 @@ export function GameManager() {
                   "Bidding player:", currentPlayerBiddingId, 
                   "Taking player:", currentPlayerTakingId);
     }
+
+    // Special case: Game is over, but user wants to undo the last take
+    if (isGameOver && currentRoundInputMode === 'TAKING' && currentPlayerTakingId === null) {
+      const order = playerOrderForGame;
+      if (order.length > 0 && firstBidderOfRoundId) {
+        // The last taker is the player before the firstBidderOfRoundId
+        const firstBidderIndex = order.indexOf(firstBidderOfRoundId);
+        const lastTakerIndex = (firstBidderIndex - 1 + order.length) % order.length;
+        const lastTakerId = order[lastTakerIndex];
+        setCurrentPlayerTakingId(lastTakerId);
+        setCurrentRoundInputMode('TAKING');
+        setPlayersScoreData(prevData => prevData.map(pd =>
+          pd.playerId === lastTakerId
+            ? {
+                ...pd,
+                scores: pd.scores.map(s =>
+                  s.roundNumber === currentRoundForInput
+                    ? { ...s, taken: null, roundScore: 0 }
+                    : s
+                ),
+              }
+            : pd
+        ).map(p => ({
+          ...p,
+          totalScore: p.scores.reduce((total, score) => total + score.roundScore, 0)
+        })));
+        return;
+      }
+    }
   }, [
     currentRoundInputMode, currentPlayerBiddingId, currentPlayerTakingId, 
     playerOrderForGame, currentRoundForInput, firstBidderOfRoundId, 
-    isEditingCurrentRound, currentDealerId
+    isEditingCurrentRound, currentDealerId, isGameOver
   ]);
 
   if (gamePhase === 'SETUP') {
@@ -744,7 +794,6 @@ export function GameManager() {
         onFinishGame={handleFinishGameEarly}
         onRestartGame={handlePlayAgain}
         onSelectDealer={handleSelectDealer}
-        // Pass new state and handlers for edit mode
         isEditingCurrentRound={isEditingCurrentRound}
         editingPlayerId={editingPlayerId}
         isPlayerValueUnderActiveEdit={isPlayerValueUnderActiveEdit}
@@ -753,6 +802,7 @@ export function GameManager() {
         onSetActiveEditPlayerValue={handleSetActiveEditPlayerValue}
         onEditSpecificRound={handleEditSpecificRound}
         onUndoPreviousPlayer={handleUndoPreviousPlayer}
+        isGameOver={isGameOver}
       />
     );
   }
