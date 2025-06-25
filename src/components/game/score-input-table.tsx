@@ -683,7 +683,7 @@ export function ScoreInputTable({
                             : `Reviewing ${currentRoundInputMode === 'BIDDING' ? 'Bid' : 'Tricks'} for ${activeEditingPlayerName}: ${activeEditingPlayerCurrentValue === 'N/A' ? '-' : activeEditingPlayerCurrentValue}`
                             }
                         </p>
-                        {isPlayerValueUnderActiveEdit && currentRoundConfig && !isGameOver ? (
+                        {isPlayerValueUnderActiveEdit && currentRoundConfig ? (
                             <NumberInputPad
                                 min={0}
                                 max={currentRoundConfig.cardsDealt}
