@@ -558,8 +558,7 @@ export function ScoreInputTable({
                                 className={cn(
                                     "text-center align-middle py-0 px-0",
                                     player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30",
-                                    dealerForThisSpecificRound && "bg-primary/20 border-l border-r border-primary/30",
-                                    isPreviousDealer && "bg-primary/40 border-l border-r border-primary/40"
+                                    dealerForThisSpecificRound && "bg-primary/20 border-l border-r border-primary/30"
                                 )}
                             >
                                   <div
