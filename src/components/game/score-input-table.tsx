@@ -225,20 +225,32 @@ export function ScoreInputTable({
         } else {
           playerCurrentValue = (typeof scoreEntry?.taken === 'number' ? scoreEntry.taken : null);
         }
-        return `Editing ${editType} for ${playerBeingEditedName} - ${cardsDealt} cards / ${playerCurrentValue ?? '-'}`;
+        return (
+          <>
+            Editing {editType} for <span className="font-bold">{playerBeingEditedName}</span> - {cardsDealt} cards / {playerCurrentValue ?? '-'}
+          </>
+        );
       }
 
       if (currentRoundInputMode === 'BIDDING') {
         if (currentPlayerBiddingId && firstBidderOfRoundId) {
           const currentBidTotal = previousRoundScoreEntries( currentRoundConfig, currentPlayerBiddingId, firstBidderOfRoundId).reduce((sum, scoreEntry) => sum + (scoreEntry.bid ?? 0), 0);
-          return `Bidding: ${currentPlayerActiveName} - bids left: ${cardsDealt - currentBidTotal}`;
+          return (
+            <>
+              Bidding: <span className="font-bold">{currentPlayerActiveName}</span> - bids left: {cardsDealt - currentBidTotal}
+            </>
+          );
         } else if (!currentRoundBidsConfirmed) {
           return `Bids Complete - ${cardsDealt} cards. Ready for Tricks.`;
         }
       } else if (currentRoundInputMode === 'TAKING') {
         if (currentPlayerTakingId && firstBidderOfRoundId) {
           const currentTakeTotal = previousRoundScoreEntries( currentRoundConfig, currentPlayerTakingId, firstBidderOfRoundId).reduce((sum, scoreEntry) => sum + (scoreEntry.taken ?? 0), 0);
-          return `Taking: ${currentPlayerActiveName} - tricks left: ${cardsDealt - currentTakeTotal}`;
+          return (
+            <>
+              Taking: <span className="font-bold">{currentPlayerActiveName}</span> - tricks left: {cardsDealt - currentTakeTotal}
+            </>
+          );
         } else if (currentRoundBidsConfirmed) {
           const isLastRound = currentRoundForInput === gameRounds.length;
           const nextActionText = isLastRound ? "Ready for Final Scores." : "Ready for Next Round.";
@@ -286,7 +298,7 @@ export function ScoreInputTable({
 
   let numPadCurrentValue: number | null = null;
   let numPadIsInvalidFn: ((num: number) => boolean) | undefined = undefined;
-  let numPadActionText = "";
+  let numPadActionText: string | React.ReactElement = "";
   let numPadPlayerName = "";
   let numPadDisabledGlobally = true;
 
@@ -340,12 +352,20 @@ export function ScoreInputTable({
 
       if (currentRoundInputMode === 'BIDDING') {
         activeEditingPlayerCurrentValue = (typeof scoreEntry?.bid === 'number' ? scoreEntry.bid : '-');
-        numPadActionText = `Editing Bid for ${activeEditingPlayerName}`;
+        numPadActionText = (
+          <>
+            Editing Bid for <span className="font-bold">{activeEditingPlayerName}</span>
+          </>
+        );
         numPadCurrentValue = (typeof scoreEntry?.bid === 'number' ? scoreEntry.bid : null);
         numPadIsInvalidFn = getIsBidInvalid(currentRoundConfig, editingPlayerId);
       } else {
         activeEditingPlayerCurrentValue = (typeof scoreEntry?.taken === 'number' ? scoreEntry.taken : '-');
-        numPadActionText = `Editing Tricks for ${activeEditingPlayerName}`;
+        numPadActionText = (
+          <>
+            Editing Tricks for <span className="font-bold">{activeEditingPlayerName}</span>
+          </>
+        );
         numPadCurrentValue = (typeof scoreEntry?.taken === 'number' ? scoreEntry.taken : null);
         numPadIsInvalidFn = getIsTakenInvalid(currentRoundConfig, editingPlayerId);
       }
@@ -557,13 +577,17 @@ export function ScoreInputTable({
                           // Check if player made exactly their bid (bid equals taken)
                           const madeExactBid = scoreEntry?.bid !== null && scoreEntry?.taken !== null && scoreEntry.bid === scoreEntry.taken;
 
+                          // Check if player missed their bid (bid and taken are both not null but don't match)
+                          const missedBid = scoreEntry?.bid !== null && scoreEntry?.taken !== null && scoreEntry.bid !== scoreEntry.taken;
+
                           return (
                             <TableCell key={`${player.playerId}-${roundInfo.roundNumber}`}
                                 className={cn(
                                     "text-center align-middle py-0 px-0",
                                     player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30",
                                     dealerForThisSpecificRound && "bg-primary/20 border-l border-r border-primary/30",
-                                    madeExactBid && "bg-green-100"
+                                    madeExactBid && "bg-green-100",
+                                    missedBid && "bg-red-200"
                                 )}
                             >
                                   <div
