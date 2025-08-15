@@ -16,9 +16,10 @@ interface PlayerSetupFormProps {
   onAddPlayer: (name: string) => void;
   onRemovePlayer: (id: string) => void;
   onStartGame: (maxCardsInHand: number, bidPoints: number) => void;
+  isResuming?: boolean;
 }
 
-export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartGame }: PlayerSetupFormProps) {
+export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartGame, isResuming = false }: PlayerSetupFormProps) {
   const [playerName, setPlayerName] = useState('');
   // Get saved values from localStorage or use defaults
   const [maxCardsInHand, setMaxCardsInHand] = useState(() => {
@@ -32,7 +33,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     if (savedConfig) {
       try {
         const config = JSON.parse(savedConfig);
-        if (config.maxCardsDealtByUser && typeof config.maxCardsDealtByUser === 'number') {
+        if (typeof config.maxCardsDealtByUser === 'number') {
           return config.maxCardsDealtByUser.toString();
         }
       } catch (error) {
@@ -45,7 +46,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     if (savedState) {
       try {
         const state = JSON.parse(savedState);
-        if (state.maxCardsDealtByUser && typeof state.maxCardsDealtByUser === 'number') {
+        if (typeof state.maxCardsDealtByUser === 'number') {
           return state.maxCardsDealtByUser.toString();
         }
       } catch (error) {
@@ -66,7 +67,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     if (savedConfig) {
       try {
         const config = JSON.parse(savedConfig);
-        if (config.bidPoints && typeof config.bidPoints === 'number') {
+        if (typeof config.bidPoints === 'number') {
           return config.bidPoints.toString();
         }
       } catch (error) {
@@ -79,7 +80,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
     if (savedState) {
       try {
         const state = JSON.parse(savedState);
-        if (state.bidPoints && typeof state.bidPoints === 'number') {
+        if (typeof state.bidPoints === 'number') {
           return state.bidPoints.toString();
         }
       } catch (error) {
@@ -287,7 +288,7 @@ export function PlayerSetupForm({ players, onAddPlayer, onRemovePlayer, onStartG
           className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
           size="lg"
         >
-          Start Game
+          {isResuming ? 'Resume Game' : 'Start Game'}
         </Button>
       </CardFooter>
     </Card>

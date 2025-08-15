@@ -32,6 +32,7 @@ export function ScoreInputTable({
   onAdvanceRoundOrEndGame,
   onFinishGame,
   onRestartGame,
+  onChangeConfiguration,
   onSelectDealer,
   // Edit mode props
   isEditingCurrentRound,
@@ -553,12 +554,16 @@ export function ScoreInputTable({
                           const takenText = scoreEntry?.taken !== null ? scoreEntry.taken.toString() : '-';
                           const scoreText = scoreEntry?.roundScore.toString() ?? '0';
 
+                          // Check if player made exactly their bid (bid equals taken)
+                          const madeExactBid = scoreEntry?.bid !== null && scoreEntry?.taken !== null && scoreEntry.bid === scoreEntry.taken;
+
                           return (
                             <TableCell key={`${player.playerId}-${roundInfo.roundNumber}`}
                                 className={cn(
                                     "text-center align-middle py-0 px-0",
                                     player.playerId === activePlayerIdForColumnHighlight && "bg-secondary/30",
-                                    dealerForThisSpecificRound && "bg-primary/20 border-l border-r border-primary/30"
+                                    dealerForThisSpecificRound && "bg-primary/20 border-l border-r border-primary/30",
+                                    madeExactBid && "bg-green-100"
                                 )}
                             >
                                   <div
@@ -806,13 +811,19 @@ export function ScoreInputTable({
 
       {(gamePhase === 'SCORING' || (isGameOver && gameRounds.length > 0)) && (
         <div className="px-1 md:px-0 mt-2 pb-2 flex flex-row justify-between items-center gap-1 md:gap-2">
-          <Button onClick={handleRestartClick} variant="outline" size="sm" className="w-full max-w-full md:max-w-[33vw] text-xs">
+          <Button onClick={handleRestartClick} variant="outline" size="sm" className="flex-1 text-xs">
             <RefreshCw className="mr-1 h-3 w-3" /> Restart Game
+          </Button>
+          <Button onClick={onChangeConfiguration} variant="outline" size="sm" className="flex-1 text-xs">
+            <UserCog className="mr-1 h-3 w-3" /> Change Configuration
           </Button>
         </div>
       )}
       {gamePhase === 'DEALER_SELECTION' && (
-        <div className="mt-4 px-1 sm:px-0 pb-2 flex justify-end items-center gap-4">
+        <div className="mt-4 px-1 sm:px-0 pb-2 flex justify-end items-center gap-2">
+          <Button onClick={onChangeConfiguration} variant="outline" size="default">
+            <UserCog className="mr-1 h-4 w-4" /> Change Configuration
+          </Button>
           <Button onClick={handleDirectRestart} variant="outline" size="default">
             <RefreshCw className="mr-1 h-4 w-4" /> Back to Setup
           </Button>

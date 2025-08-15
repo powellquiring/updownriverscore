@@ -5,7 +5,7 @@ import type { Player, GameRoundInfo, PlayerScoreData, RoundScoreEntry, GamePhase
 import { PlayerSetupForm } from './player-setup-form';
 import { ScoreInputTable } from './score-input-table';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
-import { DEFAULT_MAX_CARDS_DEALT, DEFAULT_BID_POINTS, STORAGE_KEY_GAME_STATE, STORAGE_KEY_GAME_CONFIG, STORAGE_KEY_GAME_STARTED } from '@/lib/constants';
+import { DEFAULT_MAX_CARDS_DEALT, DEFAULT_BID_POINTS, STORAGE_KEY_GAME_STATE, STORAGE_KEY_GAME_CONFIG, STORAGE_KEY_GAME_STARTED, STORAGE_KEY_SAVED_GAME_STATE } from '@/lib/constants';
 
 // Helper function to generate rounds configuration
 const generateGameRounds = (numPlayers: number, maxCardsDealtByUser: number): GameRoundInfo[] => {
@@ -71,9 +71,14 @@ export function GameManager() {
   
   // Add bidPoints state
   const [bidPoints, setBidPoints] = useState<number>(DEFAULT_BID_POINTS);
+
+
   
   // Add maxCardsDealtByUser state
   const [maxCardsDealtByUser, setMaxCardsDealtByUser] = useState<number>(DEFAULT_MAX_CARDS_DEALT);
+
+  // Add state to track if we're resuming from change configuration
+  const [isResuming, setIsResuming] = useState<boolean>(false);
   
   // Helper to load config from localStorage
   const loadConfigFromStorage = useCallback(() => {
@@ -93,7 +98,7 @@ export function GameManager() {
     // Save the current values before resetting
     const currentBidPoints = bidPoints;
     const currentMaxCards = maxCardsDealtByUser;
-    
+
     // Reset game state
     setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
     setGameRounds([]);
@@ -111,19 +116,21 @@ export function GameManager() {
     setIsEditingCurrentRound(false);
     setEditingPlayerId(null);
     setIsPlayerValueUnderActiveEdit(false);
-    
+    setIsResuming(false); // Reset the resuming flag
+
     // Restore the saved values
     setBidPoints(currentBidPoints);
     setMaxCardsDealtByUser(currentMaxCards);
-    
+
     // Create a minimal state to save just the configuration values
     const configToSave = {
       bidPoints: currentBidPoints,
       maxCardsDealtByUser: currentMaxCards
     };
-    
+
     // Remove the full game state but save the configuration
     localStorage.removeItem(STORAGE_KEY_GAME_STARTED);
+    localStorage.removeItem(STORAGE_KEY_SAVED_GAME_STATE); // Clean up any saved game state
     localStorage.setItem(STORAGE_KEY_GAME_CONFIG, JSON.stringify(configToSave));
 
     // After resetting, load config from storage (in case user had changed it)
@@ -131,6 +138,32 @@ export function GameManager() {
       loadConfigFromStorage();
     }, 0);
   }, [bidPoints, maxCardsDealtByUser, loadConfigFromStorage]); // Add dependencies
+
+  const handleChangeConfiguration = useCallback(() => {
+    // Save the current game progress (without configuration values)
+    const currentGameState = {
+      players, gameRounds, playersScoreData, currentRoundForInput, gamePhase,
+      firstDealerPlayerId, currentRoundInputMode, playerOrderForGame, currentDealerId,
+      currentPlayerBiddingId, firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed,
+      isEditingCurrentRound, editingPlayerId, isPlayerValueUnderActiveEdit,
+      // Don't save bidPoints and maxCardsDealtByUser - let user configure them fresh
+    };
+    localStorage.setItem(STORAGE_KEY_SAVED_GAME_STATE, JSON.stringify(currentGameState));
+
+    // Reset to setup phase to allow configuration changes
+    setGamePhase('SETUP');
+    setIsResuming(true); // Set the resuming flag
+
+    // Save current configuration for the setup form (so it shows current values as defaults)
+    const configToSave = {
+      bidPoints,
+      maxCardsDealtByUser
+    };
+    localStorage.setItem(STORAGE_KEY_GAME_CONFIG, JSON.stringify(configToSave));
+  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId,
+      currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId,
+      firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound,
+      editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints, maxCardsDealtByUser]);
 
   useEffect(() => {
     const loadSavedState = () => {
@@ -168,8 +201,8 @@ export function GameManager() {
           setEditingPlayerId(state.editingPlayerId && typeof state.editingPlayerId === 'string' ? state.editingPlayerId : null);
           setIsPlayerValueUnderActiveEdit(state.isPlayerValueUnderActiveEdit === true);
 
-          if (state.bidPoints && typeof state.bidPoints === 'number') setBidPoints(state.bidPoints);
-          if (state.maxCardsDealtByUser && typeof state.maxCardsDealtByUser === 'number') setMaxCardsDealtByUser(state.maxCardsDealtByUser);
+          if (typeof state.bidPoints === 'number') setBidPoints(state.bidPoints);
+          if (typeof state.maxCardsDealtByUser === 'number') setMaxCardsDealtByUser(state.maxCardsDealtByUser);
         } catch (error) {
           console.error("Failed to load saved state:", error);
           localStorage.removeItem(STORAGE_KEY_GAME_STATE); 
@@ -187,14 +220,19 @@ export function GameManager() {
   }, [loadConfigFromStorage]); // Add loadConfigFromStorage as dependency
 
   useEffect(() => {
-    if (gamePhase === 'SETUP' && 
+    if (gamePhase === 'SETUP' &&
         players.length === 3 && players.every((p, i) => p.name === defaultPlayers[i].name) &&
-        gameRounds.length === 0 && 
+        gameRounds.length === 0 &&
         playersScoreData.length === 0 &&
         currentRoundInputMode === 'BIDDING' &&
         !currentRoundBidsConfirmed &&
         !isEditingCurrentRound &&
         !localStorage.getItem(STORAGE_KEY_GAME_STARTED)) {
+      return;
+    }
+
+    // Don't save state when we're in resuming mode (in SETUP phase)
+    if (gamePhase === 'SETUP' && isResuming) {
       return;
     }
 
@@ -206,10 +244,10 @@ export function GameManager() {
     };
     localStorage.setItem(STORAGE_KEY_GAME_STATE, JSON.stringify(stateToSave));
     if (gamePhase !== 'SETUP') localStorage.setItem(STORAGE_KEY_GAME_STARTED, 'true');
-  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId, 
-      currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId, 
-      firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound, 
-      editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints, maxCardsDealtByUser]);
+  }, [players, gameRounds, playersScoreData, currentRoundForInput, gamePhase, firstDealerPlayerId,
+      currentRoundInputMode, playerOrderForGame, currentDealerId, currentPlayerBiddingId,
+      firstBidderOfRoundId, currentPlayerTakingId, currentRoundBidsConfirmed, isEditingCurrentRound,
+      editingPlayerId, isPlayerValueUnderActiveEdit, bidPoints, maxCardsDealtByUser, isResuming]);
 
 
   const handleAddPlayer = useCallback((name: string) => {
@@ -227,17 +265,78 @@ export function GameManager() {
       console.warn("Not enough players. You need at least 2 players to start.");
       return;
     }
-    
+
     setBidPoints(bidPointsValue);
     setMaxCardsDealtByUser(maxCardsDealtByUser);
-    
+
+    // Check if we're resuming from a saved state
+    if (isResuming) {
+      const savedStateStr = localStorage.getItem(STORAGE_KEY_SAVED_GAME_STATE);
+      if (savedStateStr) {
+        try {
+          const savedState = JSON.parse(savedStateStr);
+
+          // Restore the saved game progress
+          setPlayers(savedState.players || players);
+
+          // Always regenerate rounds with the new max cards value
+          const restoredGameRounds = generateGameRounds(savedState.players?.length || players.length, maxCardsDealtByUser);
+          setGameRounds(restoredGameRounds);
+
+          // Always recalculate scores with the NEW bid points value from the setup form
+          let restoredPlayersScoreData = savedState.playersScoreData || [];
+
+          restoredPlayersScoreData = restoredPlayersScoreData.map((playerData: PlayerScoreData) => {
+            const updatedScores = playerData.scores.map(scoreEntry => ({
+              ...scoreEntry,
+              roundScore: calculateRoundScore(scoreEntry.bid, scoreEntry.taken, bidPointsValue)
+            }));
+            return {
+              ...playerData,
+              scores: updatedScores,
+              totalScore: updatedScores.reduce((total: number, score) => total + score.roundScore, 0)
+            };
+          });
+          setPlayersScoreData(restoredPlayersScoreData);
+
+          setCurrentRoundForInput(savedState.currentRoundForInput || 1);
+          setGamePhase(savedState.gamePhase || 'DEALER_SELECTION');
+          setFirstDealerPlayerId(savedState.firstDealerPlayerId);
+          setCurrentRoundInputMode(savedState.currentRoundInputMode || 'BIDDING');
+          setPlayerOrderForGame(savedState.playerOrderForGame || []);
+          setCurrentDealerId(savedState.currentDealerId);
+          setCurrentPlayerBiddingId(savedState.currentPlayerBiddingId);
+          setFirstBidderOfRoundId(savedState.firstBidderOfRoundId);
+          setCurrentPlayerTakingId(savedState.currentPlayerTakingId);
+          setCurrentRoundBidsConfirmed(savedState.currentRoundBidsConfirmed || false);
+          setIsEditingCurrentRound(savedState.isEditingCurrentRound || false);
+          setEditingPlayerId(savedState.editingPlayerId);
+          setIsPlayerValueUnderActiveEdit(savedState.isPlayerValueUnderActiveEdit || false);
+
+          // Clean up the saved state
+          localStorage.removeItem(STORAGE_KEY_SAVED_GAME_STATE);
+          setIsResuming(false);
+
+          console.log("Game resumed with updated configuration!");
+          return;
+        } catch (error) {
+          console.error("Failed to restore saved game state:", error);
+          localStorage.removeItem(STORAGE_KEY_SAVED_GAME_STATE);
+          // Fall through to start a new game
+        }
+      }
+    }
+
+    setIsResuming(false); // Reset the resuming flag when starting new game
+
+    // Start a new game
     const roundsConfig = generateGameRounds(players.length, maxCardsDealtByUser);
     if (roundsConfig.length === 0) {
         console.warn("Game Configuration Error: Could not generate rounds.");
         setGamePhase('SETUP'); return;
     }
     setGameRounds(roundsConfig);
-    
+
     const currentPlayers = players.length > 0 ? players : defaultPlayers;
     const orderedPlayerIds = currentPlayers.map(p => p.id);
     setPlayerOrderForGame(orderedPlayerIds);
@@ -256,7 +355,7 @@ export function GameManager() {
     setIsEditingCurrentRound(false); setEditingPlayerId(null); setIsPlayerValueUnderActiveEdit(false);
     setGamePhase('DEALER_SELECTION');
     console.log("Game Ready! Please select the dealer for the first round.");
-  }, [players]);
+  }, [players, isResuming]);
 
   const handleSelectDealer = useCallback((playerId: string) => {
     setFirstDealerPlayerId(playerId); setCurrentDealerId(playerId);
@@ -753,7 +852,7 @@ export function GameManager() {
   ]);
 
   if (gamePhase === 'SETUP') {
-    return <PlayerSetupForm players={players} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onStartGame={handleStartGame} />;
+    return <PlayerSetupForm players={players} onAddPlayer={handleAddPlayer} onRemovePlayer={handleRemovePlayer} onStartGame={handleStartGame} isResuming={isResuming} />;
   }
 
   if ((gamePhase === 'DEALER_SELECTION' || gamePhase === 'SCORING') && (gameRounds.length > 0 || gamePhase === 'DEALER_SELECTION')) {
@@ -774,10 +873,10 @@ export function GameManager() {
     return (
       <ScoreInputTable
         playersScoreData={activePlayersScoreData}
-        allPlayers={players} 
+        allPlayers={players}
         playerOrderForGame={playerOrderForGame}
         gameRounds={gameRounds}
-        currentRoundForInput={currentRoundForInput} 
+        currentRoundForInput={currentRoundForInput}
         gamePhase={gamePhase}
         currentRoundInputMode={currentRoundInputMode}
         currentDealerId={currentDealerId}
@@ -793,6 +892,7 @@ export function GameManager() {
         onAdvanceRoundOrEndGame={handleAdvanceRoundOrEndGame}
         onFinishGame={handleFinishGameEarly}
         onRestartGame={handlePlayAgain}
+        onChangeConfiguration={handleChangeConfiguration}
         onSelectDealer={handleSelectDealer}
         isEditingCurrentRound={isEditingCurrentRound}
         editingPlayerId={editingPlayerId}

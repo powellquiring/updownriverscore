@@ -6,3 +6,4 @@ export const DEFAULT_BID_POINTS = 10;
 export const STORAGE_KEY_GAME_STATE = 'updownRiverScorerState';
 export const STORAGE_KEY_GAME_CONFIG = 'updownRiverScorerConfig';
 export const STORAGE_KEY_GAME_STARTED = 'updownRiverScorerState_gameStartedOnce';
+export const STORAGE_KEY_SAVED_GAME_STATE = 'updownRiverScorerSavedState';
