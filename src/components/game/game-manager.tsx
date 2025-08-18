@@ -10,18 +10,17 @@ import { DEFAULT_MAX_CARDS_DEALT, DEFAULT_BID_POINTS, STORAGE_KEY_GAME_STATE, ST
 // Helper function to generate rounds configuration
 const generateGameRounds = (numPlayers: number, maxCardsDealtByUser: number): GameRoundInfo[] => {
   const rounds: GameRoundInfo[] = [];
-  const actualMaxCards = Math.max(1, Math.min(maxCardsDealtByUser, numPlayers > 0 ? Math.floor(52 / numPlayers) : maxCardsDealtByUser));
 
-  for (let i = actualMaxCards; i >= 1; i--) {
+  for (let i = maxCardsDealtByUser; i >= 1; i--) {
     rounds.push({ roundNumber: rounds.length + 1, cardsDealt: i, isUpRound: false });
   }
-  if (actualMaxCards > 1) {
-    for (let i = 2; i <= actualMaxCards; i++) {
+  if (maxCardsDealtByUser > 1) {
+    for (let i = 2; i <= maxCardsDealtByUser; i++) {
       rounds.push({ roundNumber: rounds.length + 1, cardsDealt: i, isUpRound: true });
     }
   }
-  
-  if (rounds.length === 0 && actualMaxCards === 1) { 
+
+  if (rounds.length === 0 && maxCardsDealtByUser === 1) {
     rounds.push({ roundNumber: 1, cardsDealt: 1, isUpRound: false });
   }
   return rounds;
@@ -100,7 +99,7 @@ export function GameManager() {
     const currentMaxCards = maxCardsDealtByUser;
 
     // Reset game state
-    setPlayers(prevPlayers => prevPlayers.length > 0 ? prevPlayers : defaultPlayers);
+    // Keep existing players
     setGameRounds([]);
     setPlayersScoreData([]);
     setCurrentRoundForInput(1);
@@ -337,7 +336,7 @@ export function GameManager() {
     }
     setGameRounds(roundsConfig);
 
-    const currentPlayers = players.length > 0 ? players : defaultPlayers;
+    const currentPlayers = players;
     const orderedPlayerIds = currentPlayers.map(p => p.id);
     setPlayerOrderForGame(orderedPlayerIds);
 
@@ -359,11 +358,7 @@ export function GameManager() {
 
   const handleSelectDealer = useCallback((playerId: string) => {
     setFirstDealerPlayerId(playerId); setCurrentDealerId(playerId);
-    const order = playerOrderForGame.length > 0 ? playerOrderForGame : players.map(p => p.id);
-    if (order.length === 0) {
-        console.error("Error: Player order not set.");
-        setGamePhase('SETUP'); return;
-    }
+    const order = playerOrderForGame;
     const dealerIndex = order.indexOf(playerId);
     if (dealerIndex === -1) {
         console.error("Error: Dealer not found.");
@@ -607,7 +602,7 @@ export function GameManager() {
   }, [isEditingCurrentRound, currentRoundInputMode, currentPlayerBiddingId, currentRoundBidsConfirmed, currentPlayerTakingId, firstBidderOfRoundId]);
 
   const handleKeepPlayerValue = useCallback(() => {
-    if (!isEditingCurrentRound || !editingPlayerId || playerOrderForGame.length === 0) return;
+    if (!isEditingCurrentRound || !editingPlayerId) return;
 
     const order = playerOrderForGame;
     const currentEditingPlayerIndex = order.indexOf(editingPlayerId);
@@ -652,7 +647,7 @@ export function GameManager() {
     
     // Calculate the dealer for the specific round being edited
     const firstDealerIndex = playerOrderForGame.indexOf(firstDealerPlayerId || "");
-    if (firstDealerIndex === -1 && playerOrderForGame.length > 0) {
+    if (firstDealerIndex === -1) {
       console.error("First dealer not found in player order");
       return;
     }
@@ -694,10 +689,6 @@ export function GameManager() {
     }
     
     const order = playerOrderForGame;
-    if (order.length === 0) {
-      console.log("No player order defined");
-      return;
-    }
     
     // Case 1: In bidding mode
     if (currentRoundInputMode === 'BIDDING' && currentPlayerBiddingId) {

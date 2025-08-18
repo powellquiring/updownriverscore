@@ -92,7 +92,7 @@ export function ScoreInputTable({
     roundConfigForCheck: GameRoundInfo | undefined,
     playerWhosePadIsBeingConfigured: string
   ): ((num_on_pad: number) => boolean) => {
-    if (!roundConfigForCheck || playerOrderForGame.length === 0) {
+    if (!roundConfigForCheck) {
       return () => false;
     }
     const cardsDealt = roundConfigForCheck.cardsDealt;
@@ -151,7 +151,7 @@ export function ScoreInputTable({
     roundConfigForCheck: GameRoundInfo | undefined,
     playerWhosePadIsBeingConfigured: string
   ): ((num_on_pad: number) => boolean) => {
-    if (!roundConfigForCheck || playerOrderForGame.length === 0 || !currentDealerId || !firstBidderOfRoundId) {
+    if (!roundConfigForCheck || !currentDealerId || !firstBidderOfRoundId) {
       return () => false;
     }
     const cardsDealt = roundConfigForCheck.cardsDealt;
@@ -335,7 +335,7 @@ export function ScoreInputTable({
   };
 
   const getNextDealerName = useCallback(() => {
-    if (!currentDealerId || playerOrderForGame.length === 0) return "";
+    if (!currentDealerId) return "";
     const currentDealerIndex = playerOrderForGame.indexOf(currentDealerId);
     if (currentDealerIndex === -1) return "";
     const nextDealerIndex = (currentDealerIndex + 1) % playerOrderForGame.length;
@@ -559,7 +559,7 @@ export function ScoreInputTable({
 
                           const dealerForThisSpecificRound = isDealerForRound(player.playerId, roundInfo.roundNumber, firstDealerPlayerId, playerOrderForGame);
                           let isPreviousDealer = false;
-                          if (roundInfo.roundNumber > 1 && firstDealerPlayerId && playerOrderForGame.length > 0) {
+                          if (roundInfo.roundNumber > 1 && firstDealerPlayerId) {
                             const firstDealerIndex = playerOrderForGame.indexOf(firstDealerPlayerId);
                             const prevDealerIndex = (firstDealerIndex + (roundInfo.roundNumber - 2)) % playerOrderForGame.length;
                             const prevDealerId = playerOrderForGame[prevDealerIndex];
